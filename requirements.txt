@@ -1,0 +1,5 @@
+claude-agent-sdk>=0.2.174
+fastapi>=0.115
+uvicorn>=0.30
+pytest
+pytest-asyncio

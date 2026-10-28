@@ -1,0 +1,235 @@
+<title>Agentic AI Registrar Office</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column; the diagram and tables break out wider and scroll on their own when narrow. */
+:root {
+  --bg: #f4f5f2; --surface: #ffffff; --ink: #1c2321; --muted: #5d6763; --line: #d6dbd7;
+  --accent: #1f5e57; --accent-soft: #e2eeeb; --deny: #a3341c;
+  --records: #2f639c; --registration: #2c7653; --analytics: #8b5b0f; --advising: #74428a;
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121615; --surface: #1b211f; --ink: #e5ebe8; --muted: #9aa6a1; --line: #323b38;
+  --accent: #79c2b5; --accent-soft: #1d2f2b; --deny: #ee8f73;
+  --records: #8db7e6; --registration: #84cda6; --analytics: #e3b766; --advising: #cfa0e2; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #121615; --surface: #1b211f; --ink: #e5ebe8; --muted: #9aa6a1; --line: #323b38;
+  --accent: #79c2b5; --accent-soft: #1d2f2b; --deny: #ee8f73;
+  --records: #8db7e6; --registration: #84cda6; --analytics: #e3b766; --advising: #cfa0e2; color-scheme: dark; }
+
+body { background: var(--bg); color: var(--ink); font: 16px/1.6 var(--font-body); }
+.page { max-width: 1000px; margin: 0 auto; padding-block: 40px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.prose { max-width: 66ch; }
+h1, h2 { font-family: var(--font-display); font-weight: 650; text-wrap: balance; line-height: 1.15; }
+h1 { font-size: clamp(30px, 5vw, 44px); margin: 6px 0 12px; }
+h2 { font-size: 26px; margin: 56px 0 10px; }
+.eyebrow { font: 500 12px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.lede { font-size: 18px; color: var(--muted); }
+code, .mono { font-family: var(--font-mono); font-size: .88em; }
+p code { background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+
+.figure { margin-top: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow-x: auto; }
+.figure svg { display: block; min-width: 760px; width: 100%; height: auto; }
+.caption { font-size: 14px; color: var(--muted); margin-top: 10px; }
+
+svg text { fill: var(--ink); font-family: var(--font-body); }
+svg .t-title { font-weight: 600; font-size: 15px; }
+svg .t-sub { fill: var(--muted); font-size: 12px; }
+svg .t-mono { font-family: var(--font-mono); font-size: 11px; fill: var(--muted); }
+svg .t-label { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .06em; fill: var(--muted); }
+svg .box { fill: var(--surface); stroke: var(--line); stroke-width: 1.2; }
+svg .box-strong { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.6; }
+svg .edge { stroke: var(--muted); stroke-width: 1.3; fill: none; marker-end: url(#arrow); }
+svg .arrowhead { fill: var(--muted); }
+svg .band { fill: none; stroke: var(--line); stroke-dasharray: 4 5; }
+svg .cyl { fill: var(--surface); stroke: var(--accent); stroke-width: 1.3; }
+svg .s-records { fill: var(--records); } svg .s-registration { fill: var(--registration); }
+svg .s-analytics { fill: var(--analytics); } svg .s-advising { fill: var(--advising); }
+
+.flow { list-style: none; padding: 0; margin: 20px 0 0; display: grid; gap: 0; counter-reset: step; }
+.flow li { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 14px; padding: 14px 0; border-top: 1px solid var(--line); counter-increment: step; }
+.flow li::before { content: counter(step); font: 500 13px/26px var(--font-mono); text-align: center;
+  width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); color: var(--muted); background: var(--surface); }
+.flow .who { font-weight: 600; }
+.flow .detail { color: var(--muted); font-size: 15px; }
+.chip { display: inline-block; font: 600 12px/1 var(--font-body); padding: 4px 8px; border-radius: 99px; color: var(--surface); vertical-align: 1px; }
+.chip.records { background: var(--records); } .chip.registration { background: var(--registration); }
+.chip.analytics { background: var(--analytics); } .chip.advising { background: var(--advising); }
+.chip.coord { background: var(--accent); }
+.deny { color: var(--deny); font-weight: 600; }
+.quote { font-family: var(--font-display); font-size: 19px; margin: 6px 0 0; }
+
+.tablewrap { overflow-x: auto; margin-top: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+thead th { font: 500 11.5px/1.3 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); background: var(--bg); }
+tbody tr:last-child td { border-bottom: 0; }
+td.y { color: var(--registration); font-weight: 600; } td.n { color: var(--muted); }
+td.scope { color: var(--ink); }
+
+.tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 18px; }
+.tbl { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.tbl h3 { margin: 0 0 8px; font: 600 15px/1.2 var(--font-body); }
+.tbl ul { margin: 0; padding: 0; list-style: none; font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); }
+.tbl li { padding: 2px 0; } .tbl li b { color: var(--ink); font-weight: 500; }
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px 24px; margin-top: 18px; padding: 0; list-style: none; }
+.rules li { border-top: 2px solid var(--accent); padding-top: 8px; font-size: 14.5px; }
+.rules b { display: block; font-family: var(--font-display); font-size: 22px; font-weight: 650; }
+footer { margin-top: 56px; font-size: 14px; color: var(--muted); }
+</style>
+
+<div class="page">
+  <div class="eyebrow">Project architecture · Claude Agent SDK · Python</div>
+  <h1>Agentic AI Registrar Office</h1>
+  <p class="lede prose">A multi-agent system that acts like a university registrar office. It keeps five databases and answers students, professors, advisors and administrators. Each user only gets the information they're allowed to see.</p>
+
+  <h2>System architecture</h2>
+  <p class="prose">The Registrar coordinator can't read any data. It routes each request to one of four specialist agents, sending independent parts to several at once, and merges their answers. Specialists reach the data only through tools, and every tool goes through one service layer that checks the user's role.</p>
+
+  <div class="figure" role="img" aria-label="Architecture diagram: four user roles connect through the CLI or web chat to the Registrar coordinator, which delegates to Records, Registration, Analytics and Advising agents. They call tools in the service layer, which reads and writes five SQLite tables.">
+  <svg viewBox="0 0 960 700" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" class="arrowhead"/>
+      </marker>
+    </defs>
+
+    <!-- users -->
+    <text x="20" y="22" class="t-label">USERS</text>
+    <g>
+      <rect x="20" y="32" width="205" height="54" rx="8" class="box"/>
+      <text x="36" y="56" class="t-title">Student</text><text x="36" y="74" class="t-sub">schedule · register · transcript</text>
+      <rect x="258" y="32" width="205" height="54" rx="8" class="box"/>
+      <text x="274" y="56" class="t-title">Professor</text><text x="274" y="74" class="t-sub">schedule · courses · statistics</text>
+      <rect x="496" y="32" width="205" height="54" rx="8" class="box"/>
+      <text x="512" y="56" class="t-title">Advisor</text><text x="512" y="74" class="t-sub">advising courses · advisees</text>
+      <rect x="734" y="32" width="206" height="54" rx="8" class="box"/>
+      <text x="750" y="56" class="t-title">Administrator</text><text x="750" y="74" class="t-sub">course &amp; student group stats</text>
+    </g>
+    <path d="M122 86 V128" class="edge"/><path d="M360 86 V128" class="edge"/>
+    <path d="M598 86 V128" class="edge"/><path d="M837 86 V128" class="edge"/>
+
+    <!-- interfaces -->
+    <rect x="20" y="132" width="920" height="50" rx="8" class="box"/>
+    <text x="36" y="162" class="t-title">Interfaces</text>
+    <text x="140" y="162" class="t-mono">main.py (terminal) · web/app.py (browser chat, WebSocket) · login = role + ID</text>
+    <path d="M480 182 V222" class="edge"/>
+
+    <!-- coordinator -->
+    <rect x="270" y="226" width="420" height="70" rx="10" class="box-strong"/>
+    <text x="290" y="254" class="t-title">Registrar coordinator agent</text>
+    <text x="290" y="276" class="t-mono">only tool: Agent (delegate) · merges answers</text>
+
+    <path d="M330 296 C330 320, 122 316, 122 344" class="edge"/>
+    <path d="M430 296 C430 322, 360 318, 360 344" class="edge"/>
+    <path d="M530 296 C530 322, 598 318, 598 344" class="edge"/>
+    <path d="M630 296 C630 320, 837 316, 837 344" class="edge"/>
+    <text x="706" y="266" class="t-label">PARALLEL WHEN INDEPENDENT</text>
+
+    <!-- specialists -->
+    <g>
+      <rect x="20" y="348" width="205" height="112" rx="8" class="box"/><rect x="20" y="348" width="6" height="112" rx="3" class="s-records"/>
+      <text x="38" y="372" class="t-title">Records</text>
+      <text x="38" y="394" class="t-mono">get_transcript</text><text x="38" y="411" class="t-mono">submit_grade</text>
+      <text x="38" y="428" class="t-mono">find_students</text>
+
+      <rect x="258" y="348" width="205" height="112" rx="8" class="box"/><rect x="258" y="348" width="6" height="112" rx="3" class="s-registration"/>
+      <text x="276" y="372" class="t-title">Registration</text>
+      <text x="276" y="394" class="t-mono">list_courses · course_schedule</text><text x="276" y="411" class="t-mono">register_course · drop_course</text>
+      <text x="276" y="428" class="t-mono">class_roster</text><text x="276" y="445" class="t-mono">professor_schedule</text>
+
+      <rect x="496" y="348" width="205" height="112" rx="8" class="box"/><rect x="496" y="348" width="6" height="112" rx="3" class="s-analytics"/>
+      <text x="514" y="372" class="t-title">Analytics</text>
+      <text x="514" y="394" class="t-mono">course_grade_stats</text><text x="514" y="411" class="t-mono">grade_distribution_report</text>
+      <text x="514" y="428" class="t-mono">student_standing_report</text>
+
+      <rect x="734" y="348" width="206" height="112" rx="8" class="box"/><rect x="734" y="348" width="6" height="112" rx="3" class="s-advising"/>
+      <text x="752" y="372" class="t-title">Advising</text>
+      <text x="752" y="394" class="t-mono">degree_progress</text><text x="752" y="411" class="t-mono">list_advisees</text>
+      <text x="752" y="428" class="t-mono">+ transcript, catalog</text>
+    </g>
+    <path d="M122 460 V500" class="edge"/><path d="M360 460 V500" class="edge"/>
+    <path d="M598 460 V500" class="edge"/><path d="M837 460 V500" class="edge"/>
+
+    <!-- service layer -->
+    <rect x="20" y="504" width="920" height="58" rx="8" class="box-strong"/>
+    <text x="36" y="530" class="t-title">Service layer (registrar/service.py)</text>
+    <text x="36" y="550" class="t-mono">role checks in code · prerequisites · capacity · time conflicts · 18-credit cap · grade validation</text>
+    <path d="M480 562 V594" class="edge"/>
+
+    <!-- databases -->
+    <g>
+      <path d="M20 612 a80 12 0 0 1 160 0 v52 a80 12 0 0 1 -160 0 z" class="cyl"/><path d="M20 612 a80 12 0 0 0 160 0" class="cyl"/>
+      <text x="100" y="648" text-anchor="middle" class="t-title">Students</text>
+      <path d="M210 612 a80 12 0 0 1 160 0 v52 a80 12 0 0 1 -160 0 z" class="cyl"/><path d="M210 612 a80 12 0 0 0 160 0" class="cyl"/>
+      <text x="290" y="648" text-anchor="middle" class="t-title">Grades</text>
+      <path d="M400 612 a80 12 0 0 1 160 0 v52 a80 12 0 0 1 -160 0 z" class="cyl"/><path d="M400 612 a80 12 0 0 0 160 0" class="cyl"/>
+      <text x="480" y="648" text-anchor="middle" class="t-title">Schedule</text>
+      <path d="M590 612 a80 12 0 0 1 160 0 v52 a80 12 0 0 1 -160 0 z" class="cyl"/><path d="M590 612 a80 12 0 0 0 160 0" class="cyl"/>
+      <text x="670" y="648" text-anchor="middle" class="t-title">Courses</text>
+      <path d="M780 612 a80 12 0 0 1 160 0 v52 a80 12 0 0 1 -160 0 z" class="cyl"/><path d="M780 612 a80 12 0 0 0 160 0" class="cyl"/>
+      <text x="860" y="648" text-anchor="middle" class="t-title">Professors</text>
+    </g>
+  </svg>
+  </div>
+  <p class="caption">Tools are filtered twice. Each specialist only gets the tools for its own area. Then any tool the logged-in role can't use is removed before the session starts. A student session, for example, has no Analytics agent at all.</p>
+
+  <h2>One request, traced</h2>
+  <p class="prose">This is a real run from testing, as Professor P01 (Dr. Alan Turing):</p>
+  <p class="quote">“What am I teaching this semester, how are my CS201 grades historically, and show me the CS101 roster.”</p>
+  <ol class="flow">
+    <li><div><div class="who"><span class="chip coord">Registrar</span> splits the request into 2 independent jobs</div>
+      <div class="detail">The schedule and roster go to Registration, and the grade history goes to Analytics. Both run at the same time.</div></div></li>
+    <li><div><div class="who"><span class="chip registration">Registration</span> calls <code>professor_schedule</code></div>
+      <div class="detail">Result: Fall 2026 sections CS201, CS310 and CS320, with 38 students enrolled in total.</div></div></li>
+    <li><div><div class="who"><span class="chip registration">Registration</span> calls <code>class_roster(CS101)</code></div>
+      <div class="detail"><span class="deny">PermissionDenied:</span> “You do not teach CS101 in Fall 2026.” The service layer refused it, so no prompt wording could get around it.</div></div></li>
+    <li><div><div class="who"><span class="chip analytics">Analytics</span> calls <code>course_grade_stats(CS201)</code></div>
+      <div class="detail">The result only includes semesters P01 taught: 21 grades, an average GPA of 2.94, an A-rate of 28.6% and a fail-rate of 0%.</div></div></li>
+    <li><div><div class="who"><span class="chip coord">Registrar</span> merges both answers into one reply</div>
+      <div class="detail">It shows the schedule and grade tables, explains why the roster was refused, and offers rosters the professor is allowed to see. Cost of the turn: $0.17.</div></div></li>
+  </ol>
+
+  <h2>Who can see what</h2>
+  <p class="prose">These rules are checked in code on every tool call. The prompts describe them, but the prompts don't enforce them.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Capability</th><th>Student</th><th>Professor</th><th>Advisor</th><th>Administrator</th></tr></thead>
+      <tbody>
+        <tr><td>Course catalog and semester schedule</td><td class="y">all</td><td class="y">all</td><td class="y">all</td><td class="y">all</td></tr>
+        <tr><td>Transcript, GPA, degree audit</td><td class="y">own only</td><td class="n">no</td><td class="y">advisees</td><td class="y">any student</td></tr>
+        <tr><td>Register / drop courses</td><td class="y">own, Spring 2027</td><td class="n">no</td><td class="n">no</td><td class="y">any student</td></tr>
+        <tr><td>Teaching schedule and class roster</td><td class="n">no</td><td class="y">own sections</td><td class="y">own sections</td><td class="y">all</td></tr>
+        <tr><td>Submit grades</td><td class="n">no</td><td class="y">own sections, Fall 2026</td><td class="y">own sections</td><td class="n">no</td></tr>
+        <tr><td>Grade stats for one course</td><td class="n">no</td><td class="y">terms they taught</td><td class="y">terms they taught</td><td class="y">all</td></tr>
+        <tr><td>Course-group and student-group reports</td><td class="n">no</td><td class="n">no</td><td class="n">no</td><td class="y">all</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Data model</h2>
+  <p class="prose">These are the five tables from the project brief. A few columns were added so the features work: prerequisites for registration, an advisor for each student, and seat capacity and meeting times for schedules. A grade of <code>NULL</code> means the student is enrolled and the course has no grade yet.</p>
+  <div class="tables">
+    <div class="tbl"><h3>Students</h3><ul><li><b>id</b> S1001…S1060</li><li><b>name</b></li><li>major</li><li>advisor_id → Professors</li><li>entry_semester</li></ul></div>
+    <div class="tbl"><h3>Grades</h3><ul><li><b>student_id</b></li><li><b>course</b></li><li><b>semester</b></li><li><b>grade</b> A … F, or NULL</li></ul></div>
+    <div class="tbl"><h3>Schedule</h3><ul><li><b>course</b></li><li><b>semester</b></li><li><b>professor_id</b></li><li>days · time · room</li><li>capacity (35)</li></ul></div>
+    <div class="tbl"><h3>Courses</h3><ul><li><b>code</b> CS101…PHYS101</li><li><b>title</b></li><li><b>credits</b> 3 or 4</li><li>prerequisites</li></ul></div>
+    <div class="tbl"><h3>Professors</h3><ul><li><b>id</b> P01…P07</li><li><b>name</b></li><li>department</li></ul></div>
+  </div>
+
+  <h2>Registrar policies in the sample data</h2>
+  <ul class="rules">
+    <li><b>42 credits</b>to graduate, with all 8 core courses and a GPA of at least 2.0</li>
+    <li><b>GPA &lt; 2.0</b>marks a student as at risk of dismissal. A GPA from 2.0 to 2.3 is probation watch</li>
+    <li><b>C- or better</b>counts toward a prerequisite</li>
+    <li><b>18 credits</b>is the most a student can take in one semester</li>
+    <li><b>Fall 2026</b>is in progress, and registration is open for Spring 2027</li>
+  </ul>
+
+  <footer>Code: <span class="mono">registrar/db.py</span> · <span class="mono">registrar/service.py</span> · <span class="mono">registrar/agents.py</span> · <span class="mono">main.py</span> · <span class="mono">web/app.py</span></footer>
+</div>
