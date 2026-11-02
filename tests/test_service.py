@@ -103,3 +103,16 @@ async def test_tool_returns_error_on_denied(conn):
     tools = {t.name: t for t in build_tools(as_(conn, "professor", "P02"))}
     res = await tools["class_roster"].handler({"course": "CS201"})
     assert res["is_error"] and "PermissionDenied" in res["content"][0]["text"]
+
+
+def test_in_progress_course_does_not_satisfy_prerequisite(conn):
+    """A course still in progress (no grade yet) must not count as a completed prerequisite."""
+    row = conn.execute(
+        """SELECT g.student_id, c.code FROM grades g JOIN courses c
+           ON (',' || c.prerequisites || ',') LIKE ('%,' || g.course || ',%')
+           WHERE g.semester = ? AND g.grade IS NULL LIMIT 1""", (CURRENT_SEMESTER,)).fetchone()
+    assert row, "seed data should have a student taking a prerequisite this semester"
+    s = as_(conn, "student", row["student_id"])
+    with pytest.raises(RegistrarError, match="in progress"):
+        s.register(row["code"])
+    assert row["code"] not in [c["course"] for c in s.degree_progress()["eligible_next_courses"]]

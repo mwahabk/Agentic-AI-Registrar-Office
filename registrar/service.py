@@ -158,7 +158,8 @@ class Registrar:
         eligible = []
         for c in self.conn.execute("SELECT * FROM courses ORDER BY code"):
             prereqs = [p for p in c["prerequisites"].split(",") if p]
-            if c["code"] not in done_or_ip and all(p in done_or_ip for p in prereqs):
+            # prerequisites must be completed (graded C- or better); in-progress courses don't count
+            if c["code"] not in done_or_ip and all(p in passed for p in prereqs):
                 eligible.append({"course": c["code"], "title": c["title"], "credits": c["credits"],
                                  "core": c["code"] in CORE_COURSES})
         return {
@@ -169,7 +170,7 @@ class Registrar:
             "standing": _standing(gpa),
             "on_track_to_graduate_after_current_term": _will_graduate(earned + ip_credits, gpa, done_or_ip),
             "eligible_next_courses": eligible,
-            "note": "Prerequisites require C- or better; in-progress courses are assumed passed.",
+            "note": "Prerequisites must be completed with C- or better; in-progress courses do not count yet.",
         }
 
     # ---- registration --------------------------------------------------------------
@@ -190,10 +191,12 @@ class Registrar:
         passed = {r["course"] for r in rows if r["grade"] and GRADE_POINTS[r["grade"]] >= PASSING_FOR_PREREQ}
         if course in passed:
             raise RegistrarError(f"{course} has already been completed.")
-        satisfied = passed | {r["course"] for r in rows if r["grade"] is None}
-        missing = [p for p in sec["prerequisites"].split(",") if p and p not in satisfied]
+        missing = [p for p in sec["prerequisites"].split(",") if p and p not in passed]
         if missing:
-            raise RegistrarError(f"Missing prerequisites for {course}: {', '.join(missing)}")
+            in_progress = {r["course"] for r in rows if r["grade"] is None}
+            details = [f"{p} (in progress, not completed yet)" if p in in_progress else p for p in missing]
+            raise RegistrarError(f"Missing prerequisites for {course}: {', '.join(details)}. "
+                                 "Prerequisites must be completed with C- or better.")
         enrolled = self.conn.execute("SELECT COUNT(*) FROM grades WHERE course = ? AND semester = ?",
                                      (course, semester)).fetchone()[0]
         if enrolled >= sec["capacity"]:

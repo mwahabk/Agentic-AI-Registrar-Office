@@ -111,7 +111,7 @@ SPECIALISTS = {
 
 POLICY = (f"Policies: current semester is {CURRENT_SEMESTER} (in progress); registration is open for "
           f"{REGISTRATION_SEMESTER}. Degree requires {DEGREE_CREDITS} credits, GPA >= 2.0 and all core courses. "
-          f"Max {MAX_CREDITS_PER_SEMESTER} credits per semester. Prerequisites need C- or better. "
+          f"Max {MAX_CREDITS_PER_SEMESTER} credits per semester. Prerequisites must be completed with C- or better; in-progress courses do not count. "
           "GPA below 2.0 = at risk of dismissal.")
 
 
@@ -156,6 +156,7 @@ def build_options(conn: sqlite3.Connection, user: User) -> ClaudeAgentOptions:
                     f"to work around it. Return a concise, well-organized answer.\n{POLICY}"),
             tools=[full(n) for n in names],
             model="inherit",
+            background=False,  # coordinator must wait for the specialist's answer
         )
 
     system_prompt = (
@@ -164,7 +165,10 @@ def build_options(conn: sqlite3.Connection, user: User) -> ClaudeAgentOptions:
         + "; ".join(f"'{k}' ({SPECIALISTS[k]})" for k in agents)
         + ".\nDelegate every data question or action to the right specialist with the Agent tool; "
         "for requests spanning several areas, consult several specialists (in parallel when "
-        "independent) and merge their answers. Never make up data. Before registering, dropping "
+        "independent) and merge their answers. Always wait for every specialist's result and give the full answer in the "
+        "same reply; never run specialists in the background or promise to report back later. Never make up data, and don't answer questions about records, schedules, eligibility or "
+        "whether an action is allowed from memory or earlier replies: ask a specialist each time, because data "
+        "changes and only the tools apply the rules. Before registering, dropping "
         "or submitting grades, confirm the exact action with the user unless they already clearly "
         f"asked for it. Keep answers clear and brief; use tables for lists.\n{POLICY}"
     )
@@ -176,6 +180,11 @@ def build_options(conn: sqlite3.Connection, user: User) -> ClaudeAgentOptions:
         tools=["Agent"],  # coordinator has no data tools itself: it must delegate
         allowed_tools=["Agent"] + [full(n) for n in available],
         max_turns=30,
+        # specialists must finish before the coordinator replies, not run in the background
+        env={"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"},
+        # don't load the user's own Claude Code settings, MCP servers or CLAUDE.md into the agents
+        setting_sources=[],
+        strict_mcp_config=True,
     )
 
 
