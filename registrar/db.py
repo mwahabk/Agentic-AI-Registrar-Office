@@ -32,7 +32,7 @@ CREATE TABLE students (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, major TEXT NOT NULL,
     advisor_id TEXT REFERENCES professors(id), entry_semester TEXT NOT NULL);
 CREATE TABLE professors (
-    id TEXT PRIMARY KEY, name TEXT NOT NULL, department TEXT NOT NULL);
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, department TEXT NOT NULL, title TEXT NOT NULL);
 CREATE TABLE courses (
     code TEXT PRIMARY KEY, title TEXT NOT NULL, credits INTEGER NOT NULL,
     prerequisites TEXT NOT NULL DEFAULT '');  -- comma-separated course codes
@@ -48,31 +48,43 @@ CREATE TABLE grades (
     FOREIGN KEY (course, semester) REFERENCES schedule(course, semester));
 """
 
+# Computer Science instructors are real NMSU Computer Science faculty, matched to courses by research area.
+# Their course assignments, meeting times, students and grades are all fictional sample data.
+# The math, English and physics instructors are made-up names.
 PROFESSORS = [
-    ("P01", "Dr. Alan Turing", "CS"), ("P02", "Dr. Grace Hopper", "CS"),
-    ("P03", "Dr. Barbara Liskov", "CS"), ("P04", "Dr. Emmy Noether", "MATH"),
-    ("P05", "Dr. John Nash", "MATH"), ("P06", "Dr. Toni Morrison", "ENG"),
-    ("P07", "Dr. Richard Feynman", "PHYS"),
+    ("P01", "Dr. Son Tran", "CS", "Professor and Department Head"),
+    ("P02", "Dr. Inna Pivkina", "CS", "Associate Professor"),
+    ("P03", "Dr. Huiping Cao", "CS", "Professor and Associate Department Head"),
+    ("P04", "Dr. Enrico Pontelli", "CS", "Professor"),
+    ("P05", "Dr. Satyajayant Misra", "CS", "Professor"),
+    ("P06", "Dr. Roopa Vishwanathan", "CS", "Associate Professor"),
+    ("P07", "Dr. Jonathan Cook", "CS", "Professor"),
+    ("P08", "Dr. Christian Wayllace", "CS", "Assistant Professor"),
+    ("P09", "Dr. Mingzhou Song", "CS", "Professor"),
+    ("P10", "Dr. Elena Ruiz", "MATH", "Associate Professor (sample)"),
+    ("P11", "Dr. Marcus Webb", "MATH", "Professor (sample)"),
+    ("P12", "Dr. Nora Castillo", "ENG", "Assistant Professor (sample)"),
+    ("P13", "Dr. Owen Harper", "PHYS", "Professor (sample)"),
 ]
 
 # code, title, credits, prerequisites, professor
 COURSES = [
     ("CS101", "Introduction to Programming", 3, "", "P02"),
-    ("CS102", "Data Structures", 3, "CS101", "P02"),
+    ("CS102", "Data Structures", 3, "CS101", "P04"),
     ("CS201", "Algorithms", 3, "CS102,MATH150", "P01"),
-    ("CS210", "Computer Systems", 3, "CS102", "P03"),
+    ("CS210", "Computer Systems", 3, "CS102", "P06"),
     ("CS220", "Databases", 3, "CS102", "P03"),
-    ("CS301", "Operating Systems", 3, "CS210", "P03"),
-    ("CS310", "Artificial Intelligence", 3, "CS201", "P01"),
-    ("CS320", "Machine Learning", 3, "CS310,MATH250", "P01"),
-    ("CS400", "Senior Capstone", 3, "CS201,CS220", "P02"),
-    ("MATH150", "Discrete Mathematics", 3, "", "P04"),
-    ("MATH160", "Calculus I", 4, "", "P05"),
-    ("MATH250", "Linear Algebra", 3, "MATH160", "P04"),
-    ("MATH260", "Probability and Statistics", 3, "MATH160", "P05"),
-    ("ENG101", "Academic Writing", 3, "", "P06"),
-    ("ENG201", "Technical Writing", 3, "ENG101", "P06"),
-    ("PHYS101", "Physics I", 4, "MATH160", "P07"),
+    ("CS301", "Operating Systems", 3, "CS210", "P05"),
+    ("CS310", "Artificial Intelligence", 3, "CS201", "P08"),
+    ("CS320", "Machine Learning", 3, "CS310,MATH250", "P09"),
+    ("CS400", "Senior Capstone", 3, "CS201,CS220", "P07"),
+    ("MATH150", "Discrete Mathematics", 3, "", "P10"),
+    ("MATH160", "Calculus I", 4, "", "P11"),
+    ("MATH250", "Linear Algebra", 3, "MATH160", "P10"),
+    ("MATH260", "Probability and Statistics", 3, "MATH160", "P11"),
+    ("ENG101", "Academic Writing", 3, "", "P12"),
+    ("ENG201", "Technical Writing", 3, "ENG101", "P12"),
+    ("PHYS101", "Physics I", 4, "MATH160", "P13"),
 ]
 
 FIRST = ["Ava", "Liam", "Noah", "Emma", "Olivia", "Mason", "Sophia", "Lucas", "Mia", "Ethan",
@@ -107,7 +119,7 @@ def _grade_for(ability: float, rng: random.Random) -> str:
 def seed(conn: sqlite3.Connection, n_students: int = 60, seed_value: int = 42) -> None:
     rng = random.Random(seed_value)
     conn.executescript(SCHEMA)
-    conn.executemany("INSERT INTO professors VALUES (?,?,?)", PROFESSORS)
+    conn.executemany("INSERT INTO professors VALUES (?,?,?,?)", PROFESSORS)
     conn.executemany("INSERT INTO courses VALUES (?,?,?,?)", [c[:4] for c in COURSES])
     prereqs = {c[0]: [p for p in c[3].split(",") if p] for c in COURSES}
     credits = {c[0]: c[2] for c in COURSES}
@@ -118,7 +130,7 @@ def seed(conn: sqlite3.Connection, n_students: int = 60, seed_value: int = 42) -
             conn.execute("INSERT INTO schedule VALUES (?,?,?,?,?,?,?)",
                          (code, sem, prof, days, time, f"Hall {100 + i}", 35))
 
-    cs_advisors = [p[0] for p in PROFESSORS if p[2] == "CS"]
+    cs_advisors = [p[0] for p in PROFESSORS if p[2] == "CS"]  # every CS faculty member advises
     names = rng.sample([f"{f} {l}" for f in FIRST for l in LAST], n_students)
     enrolled_count: dict[tuple[str, str], int] = {}
     for n in range(n_students):

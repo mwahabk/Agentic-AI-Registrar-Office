@@ -57,6 +57,7 @@
   .chip.records { background: var(--records); } .chip.registration { background: var(--registration); }
   .chip.analytics { background: var(--analytics); } .chip.advising { background: var(--advising); }
   .tool { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+  .handoff { display: block; margin-left: 18px; font-style: italic; }
   .meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
   .thinking::after { content: "…"; animation: blink 1s infinite; } @keyframes blink { 50% { opacity: .2; } }
 
@@ -201,7 +202,10 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;",
 function handle(ev) {
   if (ev.type === "error") { addBot(`**${esc(ev.text)}**`); return; }
   if (!current) return;
-  if (ev.type === "delegate") step(`→ delegated to <span class="chip ${esc(ev.agent)}">${esc(ev.agent)}</span> ${esc(ev.description)}`);
+  if (ev.type === "delegate") {
+    step(`→ delegated to <span class="chip ${esc(ev.agent)}">${esc(ev.agent)}</span> ${esc(ev.description)}`);
+    if (ev.handoff) step(`<span class="handoff">receives from earlier agents: ${esc(ev.handoff)}</span>`);
+  }
   else if (ev.type === "tool" && $("showtools").checked)
     step(`<span class="tool">${esc(ev.agent)} · ${esc(ev.name)}(${esc(JSON.stringify(ev.input))})</span>`);
   else if (ev.type === "answer") current.answers.push(ev.text);

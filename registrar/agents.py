@@ -48,6 +48,12 @@ TOOL_SPECS: dict[str, tuple[str, dict, set[str], str, str]] = {
     "student_schedule": ("A student's class schedule for a semester.",
                          _schema({"student_id": SID, "semester": SEM}, []),
                          {"student", "advisor", "admin"}, "student_schedule", "registration"),
+    "check_enrollment": (f"Check, without registering, whether a student can enroll in a course in a semester "
+                         f"(default {REGISTRATION_SEMESTER}): open seats, time clashes with their other courses "
+                         "(overlapping times count), and the credit limit.",
+                         _schema({"course": ("string", "Course code"), "semester": SEM, "student_id": SID},
+                                 ["course"]),
+                         {"student", "advisor", "admin"}, "check_enrollment", "registration"),
     "register_course": (f"Register a student for a course (only {REGISTRATION_SEMESTER} is open). "
                         "Checks prerequisites, capacity, time conflicts and credit limit.",
                         _schema({"course": ("string", "Course code"), "semester": SEM, "student_id": SID},
@@ -63,6 +69,10 @@ TOOL_SPECS: dict[str, tuple[str, dict, set[str], str, str]] = {
     "class_roster": ("Students enrolled in a course section (professors: own sections only).",
                      _schema({"course": ("string", "Course code"), "semester": SEM}, ["course"]),
                      {"professor", "advisor", "admin"}, "class_roster", "registration"),
+    "check_prerequisites": ("Check whether a student has completed every prerequisite of a course with C- or "
+                            "better, and whether they already completed the course. Shows each prerequisite's status.",
+                            _schema({"course": ("string", "Course code"), "student_id": SID}, ["course"]),
+                            {"student", "advisor", "admin"}, "check_prerequisites", "records"),
     "get_transcript": ("Full transcript: grades per term, term and cumulative GPA, credits.",
                        _schema({"student_id": SID}, []),
                        {"student", "advisor", "admin"}, "transcript", "records"),
@@ -101,7 +111,7 @@ SHARED = {"advising": ["get_transcript", "list_courses", "course_schedule", "fin
           "analytics": ["find_students"]}
 
 SPECIALISTS = {
-    "records": "Records Agent. Handles transcripts, GPA, grade lookups and grade submission by professors.",
+    "records": "Records Agent. Handles transcripts, GPA, prerequisite checks, grade lookups and grade submission by professors.",
     "registration": "Registration Agent. Handles course catalog, semester schedules, class rosters, "
                     "and registering/dropping courses.",
     "analytics": "Analytics Agent. Produces statistics: grade distributions for a course or group of courses, "
@@ -112,7 +122,27 @@ SPECIALISTS = {
 POLICY = (f"Policies: current semester is {CURRENT_SEMESTER} (in progress); registration is open for "
           f"{REGISTRATION_SEMESTER}. Degree requires {DEGREE_CREDITS} credits, GPA >= 2.0 and all core courses. "
           f"Max {MAX_CREDITS_PER_SEMESTER} credits per semester. Prerequisites must be completed with C- or better; in-progress courses do not count. "
-          "GPA below 2.0 = at risk of dismissal.")
+          "GPA below 2.0 = at risk of dismissal; GPA 2.0 to 2.3 = probation watch; 3.5 or higher = honors. "
+          "Every passed course, core or elective, counts toward the credit total.")
+
+
+# Enrollment is the showcase of agents working together: each specialist does one step and its
+# findings are handed to the next one, so later agents build on what earlier ones found.
+ENROLLMENT_WORKFLOW = """
+
+ENROLLMENT WORKFLOW. When the user asks to enroll a student in a course, the specialists work as a chain.
+Call them one at a time, in this order, and start every prompt after the first with a line
+"Findings so far:" followed by a short summary of what the earlier agents found, so each agent builds on
+the others' work. Describe each delegation as "Step N: <what this agent checks>".
+  Step 1. records: run check_prerequisites for the course. If the course was already completed or a
+          prerequisite isn't satisfied, stop here and explain which one and why.
+  Step 2. registration: with the Records findings, run check_enrollment (open seats, time clashes, credit
+          limit). If there is a problem, stop and suggest alternatives (another course, or what to drop).
+  Step 3. advising: with the findings so far, run degree_progress and say whether the course counts toward
+          the degree and how many credits remain afterwards.
+  Step 4. registration: if all checks passed and the user clearly asked to enroll, register_course.
+          Otherwise ask the user to confirm first.
+End the reply with a short "How we checked" list: one line per agent saying what it found."""
 
 
 def build_tools(registrar: Registrar):
@@ -172,6 +202,8 @@ def build_options(conn: sqlite3.Connection, user: User) -> ClaudeAgentOptions:
         "or submitting grades, confirm the exact action with the user unless they already clearly "
         f"asked for it. Keep answers clear and brief; use tables for lists.\n{POLICY}"
     )
+    if {"records", "registration", "advising"} <= agents.keys():
+        system_prompt += ENROLLMENT_WORKFLOW
     return ClaudeAgentOptions(
         model=MODEL,
         system_prompt=system_prompt,
@@ -192,3 +224,12 @@ def _who(user: User) -> str:
     if user.role == "admin":
         return "an administrator (full access, statistics)"
     return f"{user.name} ({user.role}, ID {user.id})"
+
+
+def handoff_note(prompt: str) -> str:
+    """The findings the coordinator passes from earlier agents to this one, if any."""
+    marker = "Findings so far:"
+    if marker not in prompt:
+        return ""
+    note = " ".join(prompt.split(marker, 1)[1].split())
+    return note[:280] + ("..." if len(note) > 280 else "")

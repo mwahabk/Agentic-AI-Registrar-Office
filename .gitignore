@@ -1,0 +1,14 @@
+# Python virtual environment: everyone creates their own with
+#   python -m venv .venv  and  pip install -r requirements.txt
+.venv/
+
+# Generated on first run from registrar/db.py; delete it to reset the sample data
+data/
+
+# Python and test caches
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local downloads and archives
+*.zip

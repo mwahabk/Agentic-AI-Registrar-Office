@@ -87,7 +87,7 @@ def test_login_rejects_unknown_ids(conn):
     with pytest.raises(PermissionDenied):
         Registrar.login(conn, "student", "S9999")
     with pytest.raises(PermissionDenied):
-        Registrar.login(conn, "advisor", "P06")  # English professor advises no one
+        Registrar.login(conn, "advisor", "P12")  # English professor advises no one
 
 
 def test_tools_filtered_by_role(conn):
@@ -116,3 +116,41 @@ def test_in_progress_course_does_not_satisfy_prerequisite(conn):
     with pytest.raises(RegistrarError, match="in progress"):
         s.register(row["code"])
     assert row["code"] not in [c["course"] for c in s.degree_progress()["eligible_next_courses"]]
+
+
+def test_overlap_detection():
+    from registrar.service import _overlaps
+    assert _overlaps("MWF", "09:00-09:50", "MW", "09:30-10:45")      # shared days, partly overlapping
+    assert not _overlaps("MWF", "09:00-09:50", "MWF", "10:00-10:50")  # back to back
+    assert not _overlaps("MWF", "09:00-09:50", "TTh", "09:00-10:15")  # different days
+    assert _overlaps("TTh", "11:00-12:15", "Th", "12:00-13:00")       # Thursday only
+
+
+def test_partial_time_overlap_blocks_enrollment(conn):
+    """A section that only partly overlaps a course already on the schedule must be reported as a clash."""
+    a = Registrar(conn, User("admin"))
+    for (sid,) in conn.execute("SELECT id FROM students").fetchall():
+        eligible = [e["course"] for e in a.degree_progress(sid)["eligible_next_courses"]]
+        if len(eligible) >= 2:
+            break
+    first, second = eligible[:2]
+    a.register(first, student_id=sid)
+    sec = conn.execute("SELECT days, time FROM schedule WHERE course = ? AND semester = ?",
+                       (first, REGISTRATION_SEMESTER)).fetchone()
+    start_h = int(sec["time"][:2])
+    shifted = f"{start_h:02d}:20-{start_h + 1:02d}:35"  # starts 20 minutes into the first course
+    conn.execute("UPDATE schedule SET days = ?, time = ? WHERE course = ? AND semester = ?",
+                 (sec["days"], shifted, second, REGISTRATION_SEMESTER))
+    chk = a.check_enrollment(second, student_id=sid)
+    assert not chk["can_enroll"] and first in chk["time_clashes"][0]
+    with pytest.raises(RegistrarError, match="Time conflict"):
+        a.register(second, student_id=sid)
+
+
+def test_cs_courses_taught_by_cs_faculty(conn):
+    rows = conn.execute("""SELECT s.course, p.department FROM schedule s JOIN professors p
+                           ON p.id = s.professor_id WHERE s.course LIKE 'CS%'""").fetchall()
+    assert rows and all(r["department"] == "CS" for r in rows)
+    advisors = {r[0] for r in conn.execute("SELECT DISTINCT advisor_id FROM students")}
+    cs = {r[0] for r in conn.execute("SELECT id FROM professors WHERE department = 'CS'")}
+    assert advisors <= cs

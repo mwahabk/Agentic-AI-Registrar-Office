@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from registrar.agents import build_options
+from registrar.agents import build_options, handoff_note
 from registrar.db import CURRENT_SEMESTER, REGISTRATION_SEMESTER, connect
 from registrar.service import ROLES, PermissionDenied, Registrar, User
 
@@ -98,7 +98,8 @@ async def chat(ws: WebSocket, token: str):
                         if isinstance(block, ToolUseBlock) and block.name == "Agent":
                             agent_names[block.id] = block.input.get("subagent_type", "agent")
                             await ws.send_json({"type": "delegate", "agent": agent_names[block.id],
-                                                "description": block.input.get("description", "")})
+                                                "description": block.input.get("description", ""),
+                                                "handoff": handoff_note(block.input.get("prompt", ""))})
                         elif isinstance(block, ToolUseBlock):
                             await ws.send_json({"type": "tool", "name": block.name.split("__")[-1],
                                                 "agent": agent_names.get(msg.parent_tool_use_id, "registrar"),

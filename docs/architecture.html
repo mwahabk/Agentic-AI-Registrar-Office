@@ -136,12 +136,12 @@ footer { margin-top: 56px; font-size: 14px; color: var(--muted); }
       <rect x="20" y="348" width="205" height="112" rx="8" class="box"/><rect x="20" y="348" width="6" height="112" rx="3" class="s-records"/>
       <text x="38" y="372" class="t-title">Records</text>
       <text x="38" y="394" class="t-mono">get_transcript</text><text x="38" y="411" class="t-mono">submit_grade</text>
-      <text x="38" y="428" class="t-mono">find_students</text>
+      <text x="38" y="428" class="t-mono">find_students</text><text x="38" y="445" class="t-mono">check_prerequisites</text>
 
       <rect x="258" y="348" width="205" height="112" rx="8" class="box"/><rect x="258" y="348" width="6" height="112" rx="3" class="s-registration"/>
       <text x="276" y="372" class="t-title">Registration</text>
       <text x="276" y="394" class="t-mono">list_courses · course_schedule</text><text x="276" y="411" class="t-mono">register_course · drop_course</text>
-      <text x="276" y="428" class="t-mono">class_roster</text><text x="276" y="445" class="t-mono">professor_schedule</text>
+      <text x="276" y="428" class="t-mono">check_enrollment</text><text x="276" y="445" class="t-mono">class_roster · +1 more</text>
 
       <rect x="496" y="348" width="205" height="112" rx="8" class="box"/><rect x="496" y="348" width="6" height="112" rx="3" class="s-analytics"/>
       <text x="514" y="372" class="t-title">Analytics</text>
@@ -179,20 +179,20 @@ footer { margin-top: 56px; font-size: 14px; color: var(--muted); }
   </div>
   <p class="caption">Tools are filtered twice. Each specialist only gets the tools for its own area. Then any tool the logged-in role can't use is removed before the session starts. A student session, for example, has no Analytics agent at all.</p>
 
-  <h2>One request, traced</h2>
-  <p class="prose">This is a real run from testing, as Professor P01 (Dr. Alan Turing):</p>
-  <p class="quote">“What am I teaching this semester, how are my CS201 grades historically, and show me the CS101 roster.”</p>
+  <h2>Agents working together: an enrollment, traced</h2>
+  <p class="prose">Enrollment is a chain. Each specialist does one step, and the Registrar hands its findings to the next agent, so each one builds on what the others found. This is a real run from testing, as student S1001:</p>
+  <p class="quote">“My ID is S1001. Please enroll me in Artificial Intelligence (CS310) for Spring 2027.”</p>
   <ol class="flow">
-    <li><div><div class="who"><span class="chip coord">Registrar</span> splits the request into 2 independent jobs</div>
-      <div class="detail">The schedule and roster go to Registration, and the grade history goes to Analytics. Both run at the same time.</div></div></li>
-    <li><div><div class="who"><span class="chip registration">Registration</span> calls <code>professor_schedule</code></div>
-      <div class="detail">Result: Fall 2026 sections CS201, CS310 and CS320, with 38 students enrolled in total.</div></div></li>
-    <li><div><div class="who"><span class="chip registration">Registration</span> calls <code>class_roster(CS101)</code></div>
-      <div class="detail"><span class="deny">PermissionDenied:</span> “You do not teach CS101 in Fall 2026.” The service layer refused it, so no prompt wording could get around it.</div></div></li>
-    <li><div><div class="who"><span class="chip analytics">Analytics</span> calls <code>course_grade_stats(CS201)</code></div>
-      <div class="detail">The result only includes semesters P01 taught: 21 grades, an average GPA of 2.94, an A-rate of 28.6% and a fail-rate of 0%.</div></div></li>
-    <li><div><div class="who"><span class="chip coord">Registrar</span> merges both answers into one reply</div>
-      <div class="detail">It shows the schedule and grade tables, explains why the roster was refused, and offers rosters the professor is allowed to see. Cost of the turn: $0.17.</div></div></li>
+    <li><div><div class="who"><span class="chip records">Records</span> calls <code>check_prerequisites(CS310)</code></div>
+      <div class="detail">CS310 isn't completed yet, and its prerequisite CS201 is completed with a C+, which meets the C- minimum.</div></div></li>
+    <li><div><div class="who"><span class="chip registration">Registration</span> receives Records' findings and calls <code>check_enrollment(CS310)</code></div>
+      <div class="detail">35 of 35 seats open, no time clash with the student's other Spring 2027 courses, and 3 credits against the 18-credit limit.</div></div></li>
+    <li><div><div class="who"><span class="chip advising">Advising</span> receives both findings and calls <code>degree_progress</code></div>
+      <div class="detail">CS310 is an elective that counts toward the 42 credits; no core courses remain.</div></div></li>
+    <li><div><div class="who"><span class="chip registration">Registration</span> calls <code>register_course(CS310)</code></div>
+      <div class="detail">The service layer runs every check again in code before saving, so the agents' word is never trusted alone. Enrolled: MWF 13:00–13:50 with Dr. Christian Wayllace.</div></div></li>
+    <li><div><div class="who"><span class="chip coord">Registrar</span> writes one reply with a “How we checked” list</div>
+      <div class="detail">One line per agent with what it found. When a step fails, the chain stops there: asking for CS301 stopped at Records, because its prerequisite CS210 is still in progress.</div></div></li>
   </ol>
 
   <h2>Who can see what</h2>
@@ -213,13 +213,13 @@ footer { margin-top: 56px; font-size: 14px; color: var(--muted); }
   </div>
 
   <h2>Data model</h2>
-  <p class="prose">These are the five tables from the project brief. A few columns were added so the features work: prerequisites for registration, an advisor for each student, and seat capacity and meeting times for schedules. A grade of <code>NULL</code> means the student is enrolled and the course has no grade yet.</p>
+  <p class="prose">These are the five tables from the project brief. A few columns were added so the features work: prerequisites for registration, an advisor for each student, and seat capacity and meeting times for schedules. A grade of <code>NULL</code> means the student is enrolled and the course has no grade yet. Computer Science courses are taught by real NMSU Computer Science faculty, matched to courses by research area; their schedules, students and grades are fictional sample data.</p>
   <div class="tables">
     <div class="tbl"><h3>Students</h3><ul><li><b>id</b> S1001…S1060</li><li><b>name</b></li><li>major</li><li>advisor_id → Professors</li><li>entry_semester</li></ul></div>
     <div class="tbl"><h3>Grades</h3><ul><li><b>student_id</b></li><li><b>course</b></li><li><b>semester</b></li><li><b>grade</b> A … F, or NULL</li></ul></div>
     <div class="tbl"><h3>Schedule</h3><ul><li><b>course</b></li><li><b>semester</b></li><li><b>professor_id</b></li><li>days · time · room</li><li>capacity (35)</li></ul></div>
     <div class="tbl"><h3>Courses</h3><ul><li><b>code</b> CS101…PHYS101</li><li><b>title</b></li><li><b>credits</b> 3 or 4</li><li>prerequisites</li></ul></div>
-    <div class="tbl"><h3>Professors</h3><ul><li><b>id</b> P01…P07</li><li><b>name</b></li><li>department</li></ul></div>
+    <div class="tbl"><h3>Professors</h3><ul><li><b>id</b> P01…P13</li><li><b>name</b></li><li>department · title</li></ul></div>
   </div>
 
   <h2>Registrar policies in the sample data</h2>

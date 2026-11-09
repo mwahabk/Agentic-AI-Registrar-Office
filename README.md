@@ -28,7 +28,22 @@ SQLite: Students · Grades · Schedule · Courses · Professors
   - Professors can only see rosters and statistics for, and grade, their own sections.
   - Advisors can only see their own advisees.
   - Admins see everything.
-* The service layer enforces the business rules: prerequisites (C- or better), seat capacity, time conflicts, an 18-credit limit, the registration window, and valid grades.
+* The service layer enforces the business rules: prerequisites (completed with C- or better; courses in progress don't count), seat capacity, time conflicts (including partly overlapping times), an 18-credit limit, the registration window, and valid grades.
+
+### Agents working together: enrollment
+
+An enrollment request ("My ID is S1001, enroll me in CS310") runs as a chain. Each specialist does one step, and the Registrar passes its findings to the next agent:
+
+1. **Records** checks the prerequisites (`check_prerequisites`).
+2. **Registration** gets those findings and checks seats, time clashes and the credit limit (`check_enrollment`).
+3. **Advising** gets both findings and checks how the course fits the degree (`degree_progress`).
+4. **Registration** enrolls the student (`register_course`). The service layer runs every check again in code before saving.
+
+If a step fails, the chain stops there and the reply explains why. The reply ends with a "How we checked" list, and the web page and terminal show what each agent received from the earlier ones.
+
+### Sample data
+
+The Computer Science courses are taught by real NMSU Computer Science faculty, matched to courses by research area (for example Dr. Christian Wayllace teaches Artificial Intelligence and Dr. Huiping Cao teaches Databases). Their course assignments, meeting times, students and grades are fictional sample data. The math, English and physics instructors are made-up names.
 
 ## What each user can do (from the project brief)
 
@@ -122,8 +137,8 @@ When it shows `Uvicorn running on http://127.0.0.1:8000`, open **http://localhos
 | Role | ID |
 |---|---|
 | Student | `S1001` … `S1060` |
-| Professor | `P01` … `P07` |
-| Advisor | `P01`, `P02`, `P03` (the professors who have advisees) |
+| Professor | `P01` … `P13` (P01–P09 are Computer Science faculty) |
+| Advisor | `P01` … `P09` (every CS faculty member advises students) |
 | Administrator | no ID |
 
 ### Tests (no Claude calls, free)
@@ -144,7 +159,7 @@ When it shows `Uvicorn running on http://127.0.0.1:8000`, open **http://localhos
 
 Architecture diagram: `docs/architecture.html`
 
-On first run, the database is created at `data/registrar.db`. It's seeded with sample data: 60 students, 7 professors, 16 courses, 6 semesters, and an advisor for each student. Delete the file to reset it.
+On first run, the database is created at `data/registrar.db`. It's seeded with sample data: 60 students, 13 professors, 16 courses, 6 semesters, and an advisor for each student. Delete the file to reset it.
 Fall 2026 is in progress, and registration is open for Spring 2027.
 
 ## Files

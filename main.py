@@ -10,7 +10,7 @@ import asyncio
 
 from claude_agent_sdk import AssistantMessage, ClaudeSDKClient, ResultMessage, TextBlock, ToolUseBlock
 
-from registrar.agents import build_options
+from registrar.agents import build_options, handoff_note
 from registrar.db import DEFAULT_DB, connect
 from registrar.service import ROLES, PermissionDenied, Registrar
 
@@ -23,6 +23,9 @@ def show(msg, verbose: bool) -> None:
             if isinstance(block, ToolUseBlock):
                 if block.name == "Agent":
                     print(f"  -> delegating to {block.input.get('subagent_type')}: {block.input.get('description', '')}")
+                    note = handoff_note(block.input.get("prompt", ""))
+                    if note:
+                        print(f"       receives: {note}")
                 elif verbose:
                     print(f"     [tool] {block.name.split('__')[-1]} {block.input}")
             elif isinstance(block, TextBlock) and not quiet:

@@ -5,6 +5,7 @@ so the agents cannot leak or change data the user is not entitled to,
 whatever the prompt says.
 """
 
+import re
 import sqlite3
 from dataclasses import dataclass
 
@@ -174,46 +175,102 @@ class Registrar:
         }
 
     # ---- registration --------------------------------------------------------------
+    def check_prerequisites(self, course: str, student_id: str | None = None) -> dict:
+        """Records step of enrollment: has the student completed every prerequisite (C- or better)?"""
+        sid = self._default_student(student_id)
+        self._check_student_access(sid)
+        c = self.conn.execute("SELECT * FROM courses WHERE code = ?", (course,)).fetchone()
+        if c is None:
+            raise RegistrarError(f"No course {course} in the catalog.")
+        rows = self._student_rows(sid)
+        in_progress = {r["course"] for r in rows if r["grade"] is None}
+        best: dict[str, str | None] = {}
+        for r in rows:  # best grade per course; None (in progress) only if never graded
+            g = r["grade"]
+            if r["course"] not in best or (g and (best[r["course"]] is None
+                                                 or GRADE_POINTS[g] > GRADE_POINTS[best[r["course"]]])):
+                best[r["course"]] = g
+
+        def status(code: str) -> tuple[str, bool]:
+            if code not in best:
+                return "not taken", False
+            g = best[code]
+            if g is None:
+                return "in progress, not completed yet", False
+            ok = GRADE_POINTS[g] >= PASSING_FOR_PREREQ
+            if not ok and code in in_progress:
+                return f"in progress, not completed yet (retaking; earlier grade {g})", False
+            return f"completed with {g}" + ("" if ok else " (below C-)"), ok
+
+        prereqs = []
+        for code in [x for x in c["prerequisites"].split(",") if x]:
+            text, ok = status(code)
+            prereqs.append({"course": code, "status": text, "satisfied": ok})
+        done_text, done = status(course)
+        return {"student_id": sid, "course": course, "title": c["title"],
+                "already_completed": done, "course_status": done_text,
+                "prerequisites": prereqs or "none",
+                "all_prerequisites_satisfied": all(x["satisfied"] for x in prereqs)}
+
+    def check_enrollment(self, course: str, semester: str = REGISTRATION_SEMESTER,
+                         student_id: str | None = None) -> dict:
+        """Registration step of enrollment: open seats, time clashes and credit load, without registering."""
+        sid = self._default_student(student_id)
+        self._check_student_access(sid)
+        sec = self.conn.execute(
+            """SELECT s.*, c.credits, p.name AS professor FROM schedule s JOIN courses c ON c.code = s.course
+               JOIN professors p ON p.id = s.professor_id WHERE s.course = ? AND s.semester = ?""",
+            (course, semester)).fetchone()
+        if sec is None:
+            raise RegistrarError(f"{course} is not offered in {semester}.")
+        enrolled = self.conn.execute("SELECT COUNT(*) FROM grades WHERE course = ? AND semester = ?",
+                                     (course, semester)).fetchone()[0]
+        term = self.conn.execute(
+            """SELECT s.course, s.days, s.time, c.credits FROM grades g
+               JOIN schedule s ON s.course = g.course AND s.semester = g.semester
+               JOIN courses c ON c.code = g.course WHERE g.student_id = ? AND g.semester = ?""",
+            (sid, semester)).fetchall()
+        already = any(r["course"] == course for r in term)
+        clashes = [f"{r['course']} ({r['days']} {r['time']})" for r in term
+                   if r["course"] != course and _overlaps(r["days"], r["time"], sec["days"], sec["time"])]
+        load = sum(r["credits"] for r in term) + (0 if already else sec["credits"])
+        problems = []
+        if semester != REGISTRATION_SEMESTER:
+            problems.append(f"Registration is only open for {REGISTRATION_SEMESTER}.")
+        if already:
+            problems.append(f"Already registered for {course} in {semester}.")
+        if enrolled >= sec["capacity"] and not already:
+            problems.append(f"{course} is full ({enrolled}/{sec['capacity']}).")
+        if clashes:
+            problems.append(f"Time conflict with {', '.join(clashes)}.")
+        if load > MAX_CREDITS_PER_SEMESTER:
+            problems.append(f"Credit limit exceeded: {load} > {MAX_CREDITS_PER_SEMESTER}.")
+        return {"student_id": sid, "course": course, "semester": semester, "professor": sec["professor"],
+                "meets": f"{sec['days']} {sec['time']}, {sec['room']}",
+                "seats": f"{enrolled}/{sec['capacity']} taken", "time_clashes": clashes or "none",
+                "term_credits_after_adding": load, "problems": problems or "none", "can_enroll": not problems}
+
     def register(self, course: str, semester: str = REGISTRATION_SEMESTER, student_id: str | None = None) -> str:
+        """Final step: re-runs both checks in code, then enrolls. The agents' checks are never trusted alone."""
         self._require("student", "admin")
         sid = self._default_student(student_id)
         self._check_student_access(sid)
         if semester != REGISTRATION_SEMESTER:
             raise RegistrarError(f"Registration is only open for {REGISTRATION_SEMESTER}.")
-        sec = self.conn.execute(
-            """SELECT s.*, c.credits, c.prerequisites FROM schedule s JOIN courses c ON c.code = s.course
-               WHERE s.course = ? AND s.semester = ?""", (course, semester)).fetchone()
-        if sec is None:
-            raise RegistrarError(f"{course} is not offered in {semester}.")
-        rows = self._student_rows(sid)
-        if any(r["course"] == course and r["semester"] == semester for r in rows):
-            raise RegistrarError(f"Already registered for {course} in {semester}.")
-        passed = {r["course"] for r in rows if r["grade"] and GRADE_POINTS[r["grade"]] >= PASSING_FOR_PREREQ}
-        if course in passed:
+        pre = self.check_prerequisites(course, sid)
+        if pre["already_completed"]:
             raise RegistrarError(f"{course} has already been completed.")
-        missing = [p for p in sec["prerequisites"].split(",") if p and p not in passed]
-        if missing:
-            in_progress = {r["course"] for r in rows if r["grade"] is None}
-            details = [f"{p} (in progress, not completed yet)" if p in in_progress else p for p in missing]
+        if not pre["all_prerequisites_satisfied"]:
+            details = [f"{x['course']} ({x['status']})" for x in pre["prerequisites"] if not x["satisfied"]]
             raise RegistrarError(f"Missing prerequisites for {course}: {', '.join(details)}. "
                                  "Prerequisites must be completed with C- or better.")
-        enrolled = self.conn.execute("SELECT COUNT(*) FROM grades WHERE course = ? AND semester = ?",
-                                     (course, semester)).fetchone()[0]
-        if enrolled >= sec["capacity"]:
-            raise RegistrarError(f"{course} is full ({enrolled}/{sec['capacity']}).")
-        term = [r for r in rows if r["semester"] == semester]
-        load = sum(r["credits"] for r in term) + sec["credits"]
-        if load > MAX_CREDITS_PER_SEMESTER:
-            raise RegistrarError(f"Credit limit exceeded: {load} > {MAX_CREDITS_PER_SEMESTER}.")
-        for r in self.conn.execute(
-                """SELECT s.course, s.days, s.time FROM grades g JOIN schedule s
-                   ON s.course = g.course AND s.semester = g.semester
-                   WHERE g.student_id = ? AND g.semester = ?""", (sid, semester)):
-            if r["days"] == sec["days"] and r["time"] == sec["time"]:
-                raise RegistrarError(f"Time conflict with {r['course']} ({r['days']} {r['time']}).")
+        chk = self.check_enrollment(course, semester, sid)
+        if not chk["can_enroll"]:
+            raise RegistrarError(" ".join(chk["problems"]))
         self.conn.execute("INSERT INTO grades VALUES (?,?,?,NULL)", (sid, course, semester))
         self.conn.commit()
-        return f"Registered {sid} for {course} in {semester}. Term load: {load} credits."
+        return (f"Registered {sid} for {course} in {semester} ({chk['meets']}, {chk['professor']}). "
+                f"Term load: {chk['term_credits_after_adding']} credits.")
 
     def drop(self, course: str, semester: str = REGISTRATION_SEMESTER, student_id: str | None = None) -> str:
         self._require("student", "admin")
@@ -373,3 +430,20 @@ def _distribution(rows, **extra) -> dict:
     return {**extra, "graded": n, "average_gpa": _gpa(rows), "counts": {g: c for g, c in counts.items() if c},
             "A_rate_pct": round(100 * a / n, 1) if n else 0.0,
             "fail_rate_pct": round(100 * counts["F"] / n, 1) if n else 0.0}
+
+
+_DAY = re.compile(r"Th|M|T|W|F")
+
+
+def _minutes(hhmm: str) -> int:
+    h, m = hhmm.split(":")
+    return int(h) * 60 + int(m)
+
+
+def _overlaps(days_a: str, time_a: str, days_b: str, time_b: str) -> bool:
+    """True if two meetings share a day and their time ranges overlap (e.g. MWF 09:00-09:50 vs MW 09:30-10:45)."""
+    if not set(_DAY.findall(days_a)) & set(_DAY.findall(days_b)):
+        return False
+    a0, a1 = (_minutes(t) for t in time_a.replace("\u2013", "-").split("-"))
+    b0, b1 = (_minutes(t) for t in time_b.replace("\u2013", "-").split("-"))
+    return a0 < b1 and b0 < a1
