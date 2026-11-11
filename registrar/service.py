@@ -257,18 +257,27 @@ class Registrar:
         self._check_student_access(sid)
         if semester != REGISTRATION_SEMESTER:
             raise RegistrarError(f"Registration is only open for {REGISTRATION_SEMESTER}.")
-        pre = self.check_prerequisites(course, sid)
-        if pre["already_completed"]:
-            raise RegistrarError(f"{course} has already been completed.")
-        if not pre["all_prerequisites_satisfied"]:
-            details = [f"{x['course']} ({x['status']})" for x in pre["prerequisites"] if not x["satisfied"]]
-            raise RegistrarError(f"Missing prerequisites for {course}: {', '.join(details)}. "
-                                 "Prerequisites must be completed with C- or better.")
-        chk = self.check_enrollment(course, semester, sid)
-        if not chk["can_enroll"]:
-            raise RegistrarError(" ".join(chk["problems"]))
-        self.conn.execute("INSERT INTO grades VALUES (?,?,?,NULL)", (sid, course, semester))
-        self.conn.commit()
+        if self.conn.in_transaction:
+            self.conn.commit()
+        # Take the database's write lock BEFORE counting seats. Two students can then never both see the
+        # last seat as free: the second registration waits here until the first is saved, then sees a full course.
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            pre = self.check_prerequisites(course, sid)
+            if pre["already_completed"]:
+                raise RegistrarError(f"{course} has already been completed.")
+            if not pre["all_prerequisites_satisfied"]:
+                details = [f"{x['course']} ({x['status']})" for x in pre["prerequisites"] if not x["satisfied"]]
+                raise RegistrarError(f"Missing prerequisites for {course}: {', '.join(details)}. "
+                                     "Prerequisites must be completed with C- or better.")
+            chk = self.check_enrollment(course, semester, sid)
+            if not chk["can_enroll"]:
+                raise RegistrarError(" ".join(chk["problems"]))
+            self.conn.execute("INSERT INTO grades VALUES (?,?,?,NULL)", (sid, course, semester))
+            self.conn.commit()
+        except BaseException:
+            self.conn.rollback()
+            raise
         return (f"Registered {sid} for {course} in {semester} ({chk['meets']}, {chk['professor']}). "
                 f"Term load: {chk['term_credits_after_adding']} credits.")
 

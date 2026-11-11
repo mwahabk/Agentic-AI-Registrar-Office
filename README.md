@@ -28,6 +28,7 @@ SQLite: Students · Grades · Schedule · Courses · Professors
   - Professors can only see rosters and statistics for, and grade, their own sections.
   - Advisors can only see their own advisees.
   - Admins see everything.
+* Registration locks the database while it checks seats and saves, so two students can never both take the last seat (see `demo_last_seat.py`).
 * The service layer enforces the business rules: prerequisites (completed with C- or better; courses in progress don't count), seat capacity, time conflicts (including partly overlapping times), an 18-credit limit, the registration window, and valid grades.
 
 ### Agents working together: enrollment
@@ -141,6 +142,14 @@ When it shows `Uvicorn running on http://127.0.0.1:8000`, open **http://localhos
 | Advisor | `P01` … `P09` (every CS faculty member advises students) |
 | Administrator | no ID |
 
+### Demo: two students, one seat
+
+```bat
+.venv\Scripts\python demo_last_seat.py
+```
+
+Shows what happens when two students try to take the **last seat** in a course at the same moment. Part 1 uses the old logic without a lock, and the course ends up overbooked. Part 2 uses the real registration code, which locks the database while it checks seats: one student gets the seat and the other is told the course is full. It runs on a temporary copy of the database and makes no Claude calls, so it's free and safe to run any time.
+
 ### Tests (no Claude calls, free)
 
 ```bat
@@ -159,7 +168,7 @@ When it shows `Uvicorn running on http://127.0.0.1:8000`, open **http://localhos
 
 Architecture diagram: `docs/architecture.html`
 
-On first run, the database is created at `data/registrar.db`. It's seeded with sample data: 60 students, 13 professors, 16 courses, 6 semesters, and an advisor for each student. Delete the file to reset it.
+On first run, the database is created at `data/registrar.db`. It's seeded with sample data: 60 students, 13 professors, 22 courses (16 core and general, 6 CS electives), 6 semesters, and an advisor for each student. Delete the file to reset it.
 Fall 2026 is in progress, and registration is open for Spring 2027.
 
 ## Files
@@ -168,6 +177,7 @@ Fall 2026 is in progress, and registration is open for Spring 2027.
 * `registrar/service.py`: business logic and permission checks
 * `registrar/agents.py`: tool definitions, specialist subagents, and the coordinator
 * `main.py`: CLI
+* `demo_last_seat.py`: demo of two students racing for the last seat
 * `web/app.py`, `web/static/index.html`: web chat (FastAPI + WebSocket)
 * `docs/architecture.html`: architecture diagram for the write-up
 * `tests/test_service.py`: tests for access control and business rules

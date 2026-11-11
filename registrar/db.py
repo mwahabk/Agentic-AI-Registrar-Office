@@ -24,6 +24,7 @@ GRADE_POINTS = {"A": 4.0, "A-": 3.7, "B+": 3.3, "B": 3.0, "B-": 2.7, "C+": 2.3,
                 "C": 2.0, "C-": 1.7, "D+": 1.3, "D": 1.0, "F": 0.0}
 PASSING_FOR_PREREQ = 1.7  # C- or better satisfies a prerequisite
 MAX_CREDITS_PER_SEMESTER = 18
+TERM_LOADS = [3, 3, 4]  # courses a sample student takes per semester (picked at random)
 DEGREE_CREDITS = 42
 CORE_COURSES = ["CS101", "CS102", "CS201", "CS220", "CS400", "MATH150", "MATH160", "ENG101"]
 
@@ -85,6 +86,13 @@ COURSES = [
     ("ENG101", "Academic Writing", 3, "", "P12"),
     ("ENG201", "Technical Writing", 3, "ENG101", "P12"),
     ("PHYS101", "Physics I", 4, "MATH160", "P13"),
+    # electives, so students always have options beyond the prerequisite chain
+    ("CS150", "Web Programming", 3, "CS101", "P07"),
+    ("CS240", "Computer Security", 3, "CS102", "P06"),
+    ("CS250", "Software Engineering", 3, "CS102", "P07"),
+    ("CS260", "Data Mining", 3, "CS102,MATH260", "P03"),
+    ("CS330", "Computer Networks", 3, "CS210", "P05"),
+    ("CS340", "Bioinformatics", 3, "CS201", "P09"),
 ]
 
 FIRST = ["Ava", "Liam", "Noah", "Emma", "Olivia", "Mason", "Sophia", "Lucas", "Mia", "Ethan",
@@ -99,7 +107,7 @@ def connect(path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
     path = Path(path)
     fresh = not path.exists()
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, timeout=30)  # wait up to 30 s for another registration to finish
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     if fresh:
@@ -125,8 +133,13 @@ def seed(conn: sqlite3.Connection, n_students: int = 60, seed_value: int = 42) -
     credits = {c[0]: c[2] for c in COURSES}
 
     for sem in SEMESTERS:
+        busy: set[tuple[str, int]] = set()  # (professor, slot): nobody teaches two classes at once
         for i, (code, *_rest, prof) in enumerate(COURSES):
-            days, time = SLOTS[(i + SEMESTERS.index(sem)) % len(SLOTS)]
+            slot = (i + SEMESTERS.index(sem)) % len(SLOTS)
+            while (prof, slot) in busy:
+                slot = (slot + 1) % len(SLOTS)
+            busy.add((prof, slot))
+            days, time = SLOTS[slot]
             conn.execute("INSERT INTO schedule VALUES (?,?,?,?,?,?,?)",
                          (code, sem, prof, days, time, f"Hall {100 + i}", 35))
 
@@ -147,7 +160,7 @@ def seed(conn: sqlite3.Connection, n_students: int = 60, seed_value: int = 42) -
             rng.shuffle(eligible)
             # prefer core courses first, like a real student
             eligible.sort(key=lambda c: c not in CORE_COURSES)
-            for code in eligible[:rng.choice([3, 4, 4, 5])]:
+            for code in eligible[:rng.choice(TERM_LOADS)]:
                 enrolled_count[(code, sem)] = enrolled_count.get((code, sem), 0) + 1
                 grade = None if sem == CURRENT_SEMESTER else _grade_for(ability, rng)
                 conn.execute("INSERT INTO grades VALUES (?,?,?,?)", (sid, code, sem, grade))

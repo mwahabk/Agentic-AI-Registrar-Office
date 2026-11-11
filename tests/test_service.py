@@ -154,3 +154,31 @@ def test_cs_courses_taught_by_cs_faculty(conn):
     advisors = {r[0] for r in conn.execute("SELECT DISTINCT advisor_id FROM students")}
     cs = {r[0] for r in conn.execute("SELECT id FROM professors WHERE department = 'CS'")}
     assert advisors <= cs
+
+
+def test_sample_data_leaves_students_courses_to_register_for(conn):
+    """The demo needs most students to have something to enroll in next semester, and no double-booked teachers."""
+    a = Registrar(conn, User("admin"))
+    counts = [len(a.degree_progress(sid)["eligible_next_courses"])
+              for (sid,) in conn.execute("SELECT id FROM students").fetchall()]
+    assert sum(1 for n in counts if n >= 2) >= 0.75 * len(counts)
+    assert not conn.execute("""SELECT 1 FROM schedule GROUP BY semester, professor_id, days, time
+                               HAVING COUNT(*) > 1""").fetchone()
+
+
+def test_two_students_cannot_both_take_the_last_seat(tmp_path):
+    """Two simultaneous registrations for the last seat: exactly one succeeds, the course is never overbooked."""
+    import demo_last_seat as demo
+    db_path = tmp_path / "race.db"
+    conn = connect(db_path)
+    course, students = demo.pick_course_and_students(conn)
+    demo.course = course
+    demo.leave_one_seat(conn, course, students)
+    Registrar.check_enrollment, original = demo.slow_check, Registrar.check_enrollment
+    try:
+        results = demo.race(db_path, course, students, demo.with_lock)
+    finally:
+        Registrar.check_enrollment = original
+    assert sum(r.startswith("GOT THE SEAT") for r in results.values()) == 1
+    taken, cap = demo.seats(conn, course)
+    assert taken == cap
