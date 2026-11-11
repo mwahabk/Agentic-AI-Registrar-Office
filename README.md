@@ -2,6 +2,12 @@
 
 A multi-agent AI system that works like a university registrar office. It's built with the Claude Agent SDK (Python).
 
+**Quick links:**
+* **[How to install and run](#installation)**: set up once, then run the web app or the terminal version
+* **[How to test it (TESTING.md)](TESTING.md)**: step-by-step tests in the web app, with expected results
+* **[RAG report (PDF)](docs/RAG_Report.pdf)**: how knowledge retrieval is used in the system
+* **[Architecture diagram](docs/architecture.html)**: download and open in a browser
+
 ## Architecture
 
 ```
@@ -49,6 +55,16 @@ An enrollment request ("My ID is S1001, enroll me in CS310") runs as a chain. Ea
 
 If a step fails, the chain stops there and the reply explains why. The reply ends with a "How we checked" list, and the web page and terminal show what each agent received from the earlier ones.
 
+### Knowledge retrieval (RAG)
+
+Questions about rules, deadlines, procedures and course content are answered from the registrar's documents in `knowledge/` (2026-2027 handbook, a superseded 2024-2025 handbook, the course catalog and an advising guide):
+
+* **Ingestion:** each document section becomes a chunk with metadata (document, section, effective date, current/superseded). Chunks are embedded with a small local model (`potion-retrieval-32M`, downloaded once, about 130 MB, no API key) and cached in `data/rag_index.npz`.
+* **Retrieval:** hybrid search: BM25 keyword ranking plus embedding similarity, combined with reciprocal rank fusion. If nothing relevant is found, the tool says so (knowledge-gap check). Without the model (offline), it falls back to keyword search.
+* **Policy agent (Agentic RAG):** answers only from retrieved passages, cites them as [document > section], prefers current rules over superseded ones, searches again with new wording when results are poor, and never guesses when the documents don't cover a question. The Advising agent uses the same search, and a refused enrollment step is explained with the handbook rule behind it.
+* **Visible in the demo:** the web page and terminal show each search and which documents it retrieved.
+* **Evaluation:** `python rag_eval.py` compares keyword, vector and hybrid retrieval on 30 test questions (hybrid: 87% of answers in the top 3). Full write-up: `docs/RAG_Report.pdf`.
+
 ### Sample data
 
 The Computer Science courses are taught by real NMSU Computer Science faculty, matched to courses by research area (for example Dr. Christian Wayllace teaches Artificial Intelligence and Dr. Huiping Cao teaches Databases). Their course assignments, meeting times, students and grades are fictional sample data. The math, English and physics instructors are made-up names.
@@ -93,7 +109,7 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 ```
 
-This installs both modes: the CLI (`claude-agent-sdk`) and the web chat (`fastapi`, `uvicorn`, `websockets`).
+This installs both modes: the CLI (`claude-agent-sdk`) and the web chat (`fastapi`, `uvicorn`, `websockets`), plus `model2vec` for knowledge retrieval. The first question that searches the documents downloads the embedding model (about 130 MB) once.
 
 Only if you use an API key instead of a subscription, set it in each new terminal:
 
@@ -140,6 +156,8 @@ It asks for a role and an ID. Type `quit` to exit. More options:
 
 When it shows `Uvicorn running on http://127.0.0.1:8000`, open **http://localhost:8000**. Sign in with a role and ID. The page shows which specialist agents handle each request (tick **tool calls** to see every tool call), renders tables, and suggests questions for each role. Keep the terminal open while you use it, and press **Ctrl+C** to stop. After restarting the server, refresh the page and sign in again.
 
+To test every feature step by step in the web app (with the expected result for each question), follow **[TESTING.md](TESTING.md)**.
+
 ### Sample logins
 
 | Role | ID |
@@ -183,8 +201,13 @@ Fall 2026 is in progress, and registration is open for Spring 2027.
 * `registrar/db.py`: schema, policies, and the sample-data generator
 * `registrar/service.py`: business logic and permission checks
 * `registrar/agents.py`: tool definitions, specialist subagents, and the coordinator
+* `registrar/rag.py`: knowledge retrieval (chunking, embeddings, BM25, hybrid search)
+* `knowledge/`: the registrar's documents used for RAG
+* `rag_eval.py`: retrieval evaluation (keyword vs vector vs hybrid)
+* `docs/RAG_Report.pdf` (and `.html`): report on how RAG is used
 * `main.py`: CLI
 * `demo_last_seat.py`: demo of two students racing for the last seat
+* `TESTING.md`: step-by-step test guide with expected results
 * `web/app.py`, `web/static/index.html`: web chat (FastAPI + WebSocket)
 * `docs/architecture.html`: architecture diagram for the write-up
 * `tests/test_service.py`: tests for access control and business rules
