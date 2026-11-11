@@ -184,15 +184,15 @@ footer { margin-top: 56px; font-size: 14px; color: var(--muted); }
   <p class="quote">“My ID is S1001. Please enroll me in Artificial Intelligence (CS310) for Spring 2027.”</p>
   <ol class="flow">
     <li><div><div class="who"><span class="chip records">Records</span> calls <code>check_prerequisites(CS310)</code></div>
-      <div class="detail">CS310 isn't completed yet, and its prerequisite CS201 is completed with a C+, which meets the C- minimum.</div></div></li>
+      <div class="detail">CS310 isn't completed yet, and its prerequisite CS201 is completed with a C, which meets the C- minimum.</div></div></li>
     <li><div><div class="who"><span class="chip registration">Registration</span> receives Records' findings and calls <code>check_enrollment(CS310)</code></div>
       <div class="detail">35 of 35 seats open, no time clash with the student's other Spring 2027 courses, and 3 credits against the 18-credit limit.</div></div></li>
     <li><div><div class="who"><span class="chip advising">Advising</span> receives both findings and calls <code>degree_progress</code></div>
-      <div class="detail">CS310 is an elective that counts toward the 42 credits; no core courses remain.</div></div></li>
+      <div class="detail">CS310 is an elective that counts toward the 42 credits; with 34 credits earned and no core courses left, 5 credits would remain after it.</div></div></li>
     <li><div><div class="who"><span class="chip registration">Registration</span> calls <code>register_course(CS310)</code></div>
       <div class="detail">The service layer runs every check again in code before saving, so the agents' word is never trusted alone. Enrolled: MWF 13:00–13:50 with Dr. Christian Wayllace.</div></div></li>
     <li><div><div class="who"><span class="chip coord">Registrar</span> writes one reply with a “How we checked” list</div>
-      <div class="detail">One line per agent with what it found. When a step fails, the chain stops there: asking for CS301 stopped at Records, because its prerequisite CS210 is still in progress.</div></div></li>
+      <div class="detail">One line per agent with what it found. When a step fails, the chain stops there: asking for a course whose prerequisite is still in progress stops at Records, and nothing is registered.</div></div></li>
   </ol>
 
   <h2>Who can see what</h2>
@@ -218,7 +218,7 @@ footer { margin-top: 56px; font-size: 14px; color: var(--muted); }
     <div class="tbl"><h3>Students</h3><ul><li><b>id</b> S1001…S1060</li><li><b>name</b></li><li>major</li><li>advisor_id → Professors</li><li>entry_semester</li></ul></div>
     <div class="tbl"><h3>Grades</h3><ul><li><b>student_id</b></li><li><b>course</b></li><li><b>semester</b></li><li><b>grade</b> A … F, or NULL</li></ul></div>
     <div class="tbl"><h3>Schedule</h3><ul><li><b>course</b></li><li><b>semester</b></li><li><b>professor_id</b></li><li>days · time · room</li><li>capacity (35)</li></ul></div>
-    <div class="tbl"><h3>Courses</h3><ul><li><b>code</b> CS101…PHYS101</li><li><b>title</b></li><li><b>credits</b> 3 or 4</li><li>prerequisites</li></ul></div>
+    <div class="tbl"><h3>Courses</h3><ul><li><b>code</b> CS101…PHYS101 (22 courses)</li><li><b>title</b></li><li><b>credits</b> 3 or 4</li><li>prerequisites</li></ul></div>
     <div class="tbl"><h3>Professors</h3><ul><li><b>id</b> P01…P13</li><li><b>name</b></li><li>department · title</li></ul></div>
   </div>
 

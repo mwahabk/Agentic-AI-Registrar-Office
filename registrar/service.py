@@ -10,7 +10,7 @@ import sqlite3
 from dataclasses import dataclass
 
 from .db import (CORE_COURSES, CURRENT_SEMESTER, DEGREE_CREDITS, GRADE_POINTS,
-                 MAX_CREDITS_PER_SEMESTER, PASSING_FOR_PREREQ, REGISTRATION_SEMESTER, SEMESTERS)
+                 MAX_CREDITS_PER_SEMESTER, PASSING_FOR_PREREQ, PROBATION_MAX_CREDITS, REGISTRATION_SEMESTER, SEMESTERS)
 
 ROLES = ("student", "professor", "advisor", "admin")
 
@@ -28,6 +28,23 @@ class User:
     role: str
     id: str | None = None  # student or professor ID; None for admin
     name: str = ""
+
+
+def _latest_attempts(rows) -> list:
+    """Most recent graded attempt of each course: a repeated course counts once, with its latest grade."""
+    order = {sem: i for i, sem in enumerate(SEMESTERS)}
+    latest = {}
+    for r in rows:
+        if r["grade"] is not None and (r["course"] not in latest
+                                       or order[r["semester"]] > order[latest[r["course"]]["semester"]]):
+            latest[r["course"]] = r
+    return list(latest.values())
+
+
+def _cumulative(rows) -> tuple[float | None, int]:
+    """Cumulative GPA and credits earned, counting each repeated course once (latest grade)."""
+    latest = _latest_attempts(rows)
+    return _gpa(latest), sum(r["credits"] for r in latest if GRADE_POINTS[r["grade"]] > 0)
 
 
 def _gpa(rows) -> float | None:
@@ -125,6 +142,7 @@ class Registrar:
                FROM students s LEFT JOIN professors p ON p.id = s.advisor_id WHERE s.id = ?""",
             (sid,)).fetchone())
         rows = self._student_rows(sid)
+        counted = {(r["course"], r["semester"]) for r in _latest_attempts(rows)}
         terms = []
         for sem in SEMESTERS:
             term = [r for r in rows if r["semester"] == sem]
@@ -132,9 +150,10 @@ class Registrar:
                 terms.append({"semester": sem, "term_gpa": _gpa(term),
                               "courses": [{"course": r["course"], "title": r["title"],
                                            "credits": r["credits"],
-                                           "grade": r["grade"] or "IP (in progress)"} for r in term]})
-        earned = sum(r["credits"] for r in rows if r["grade"] and GRADE_POINTS[r["grade"]] > 0)
-        return {**student, "cumulative_gpa": _gpa(rows), "credits_earned": earned, "terms": terms}
+                                           "grade": _grade_label(r, counted)} for r in term]})
+        gpa, earned = _cumulative(rows)
+        return {**student, "cumulative_gpa": gpa, "credits_earned": earned, "terms": terms,
+                "note": "A repeated course counts once in the GPA and credits, with its most recent grade."}
 
     def student_schedule(self, student_id: str | None = None, semester: str = CURRENT_SEMESTER) -> list[dict]:
         sid = self._default_student(student_id)
@@ -152,9 +171,8 @@ class Registrar:
         rows = self._student_rows(sid)
         passed = {r["course"] for r in rows if r["grade"] and GRADE_POINTS[r["grade"]] >= PASSING_FOR_PREREQ}
         in_progress = {r["course"] for r in rows if r["grade"] is None}
-        earned = sum(r["credits"] for r in rows if r["grade"] and GRADE_POINTS[r["grade"]] > 0)
+        gpa, earned = _cumulative(rows)
         ip_credits = sum(r["credits"] for r in rows if r["grade"] is None)
-        gpa = _gpa(rows)
         done_or_ip = passed | in_progress
         eligible = []
         for c in self.conn.execute("SELECT * FROM courses ORDER BY code"):
@@ -209,6 +227,8 @@ class Registrar:
         done_text, done = status(course)
         return {"student_id": sid, "course": course, "title": c["title"],
                 "already_completed": done, "course_status": done_text,
+                "currently_taking": any(r["course"] == course and r["semester"] == CURRENT_SEMESTER
+                                        and r["grade"] is None for r in rows),
                 "prerequisites": prereqs or "none",
                 "all_prerequisites_satisfied": all(x["satisfied"] for x in prereqs)}
 
@@ -243,8 +263,13 @@ class Registrar:
             problems.append(f"{course} is full ({enrolled}/{sec['capacity']}).")
         if clashes:
             problems.append(f"Time conflict with {', '.join(clashes)}.")
-        if load > MAX_CREDITS_PER_SEMESTER:
-            problems.append(f"Credit limit exceeded: {load} > {MAX_CREDITS_PER_SEMESTER}.")
+        gpa, _ = _cumulative(self._student_rows(sid))
+        if gpa is not None and gpa < 2.0 and load > PROBATION_MAX_CREDITS:
+            problems.append(f"Students on academic probation (GPA {gpa} is below 2.0) may take at most "
+                            f"{PROBATION_MAX_CREDITS} credits per semester; this would make {load}.")
+        elif load > MAX_CREDITS_PER_SEMESTER:
+            problems.append(f"Credit limit exceeded: {load} > {MAX_CREDITS_PER_SEMESTER}. More than "
+                            f"{MAX_CREDITS_PER_SEMESTER} credits is an overload and needs written permission.")
         return {"student_id": sid, "course": course, "semester": semester, "professor": sec["professor"],
                 "meets": f"{sec['days']} {sec['time']}, {sec['room']}",
                 "seats": f"{enrolled}/{sec['capacity']} taken", "time_clashes": clashes or "none",
@@ -265,7 +290,11 @@ class Registrar:
         try:
             pre = self.check_prerequisites(course, sid)
             if pre["already_completed"]:
-                raise RegistrarError(f"{course} has already been completed.")
+                raise RegistrarError(f"{course} was already completed ({pre['course_status']}). Only courses with "
+                                     "a grade below C- (D or F) can be repeated.")
+            if pre["currently_taking"]:
+                raise RegistrarError(f"{sid} is currently taking {course} this semester and can't register "
+                                     "for it again until it is graded.")
             if not pre["all_prerequisites_satisfied"]:
                 details = [f"{x['course']} ({x['status']})" for x in pre["prerequisites"] if not x["satisfied"]]
                 raise RegistrarError(f"Missing prerequisites for {course}: {', '.join(details)}. "
@@ -379,8 +408,7 @@ class Registrar:
         out = []
         for s in self.conn.execute("SELECT id, name FROM students ORDER BY id").fetchall():
             rows = self._student_rows(s["id"])
-            gpa = _gpa(rows)
-            earned = sum(r["credits"] for r in rows if r["grade"] and GRADE_POINTS[r["grade"]] > 0)
+            gpa, earned = _cumulative(rows)
             ip = sum(r["credits"] for r in rows if r["grade"] is None)
             done = {r["course"] for r in rows if r["grade"] is None
                     or GRADE_POINTS[r["grade"]] >= PASSING_FOR_PREREQ}
@@ -400,8 +428,11 @@ class Registrar:
         rows = self.conn.execute(
             "SELECT id, name, entry_semester FROM students WHERE advisor_id = ? ORDER BY name",
             (self.user.id,)).fetchall()
-        return [{**dict(r), "gpa": _gpa(self._student_rows(r["id"])),
-                 "standing": _standing(_gpa(self._student_rows(r["id"])))} for r in rows]
+        out = []
+        for r in rows:
+            gpa, _ = _cumulative(self._student_rows(r["id"]))
+            out.append({**dict(r), "gpa": gpa, "standing": _standing(gpa)})
+        return out
 
     def find_students(self, query: str) -> list[dict]:
         self._require("admin", "advisor")
@@ -418,7 +449,8 @@ def _standing(gpa: float | None) -> str:
     if gpa is None:
         return "no grades yet"
     if gpa < 2.0:
-        return "at risk of dismissal (GPA below 2.0)"
+        return (f"academic probation, at risk of dismissal (GPA below 2.0; "
+                f"limited to {PROBATION_MAX_CREDITS} credits per semester)")
     if gpa < 2.3:
         return "probation watch"
     if gpa >= 3.5:
@@ -456,3 +488,11 @@ def _overlaps(days_a: str, time_a: str, days_b: str, time_b: str) -> bool:
     a0, a1 = (_minutes(t) for t in time_a.replace("\u2013", "-").split("-"))
     b0, b1 = (_minutes(t) for t in time_b.replace("\u2013", "-").split("-"))
     return a0 < b1 and b0 < a1
+
+
+def _grade_label(r, counted: set) -> str:
+    if r["grade"] is None:
+        return "IP (in progress)"
+    if (r["course"], r["semester"]) not in counted:
+        return f"{r['grade']} (repeated later; not counted)"
+    return r["grade"]

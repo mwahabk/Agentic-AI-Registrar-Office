@@ -24,6 +24,7 @@ GRADE_POINTS = {"A": 4.0, "A-": 3.7, "B+": 3.3, "B": 3.0, "B-": 2.7, "C+": 2.3,
                 "C": 2.0, "C-": 1.7, "D+": 1.3, "D": 1.0, "F": 0.0}
 PASSING_FOR_PREREQ = 1.7  # C- or better satisfies a prerequisite
 MAX_CREDITS_PER_SEMESTER = 18
+PROBATION_MAX_CREDITS = 13  # NMSU: students on academic probation may take at most 13 credits
 TERM_LOADS = [3, 3, 4]  # courses a sample student takes per semester (picked at random)
 DEGREE_CREDITS = 42
 CORE_COURSES = ["CS101", "CS102", "CS201", "CS220", "CS400", "MATH150", "MATH160", "ENG101"]

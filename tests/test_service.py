@@ -182,3 +182,104 @@ def test_two_students_cannot_both_take_the_last_seat(tmp_path):
     assert sum(r.startswith("GOT THE SEAT") for r in results.values()) == 1
     taken, cap = demo.seats(conn, course)
     assert taken == cap
+
+
+# ---- registration rules, each checked with a test student built for it ----------------------------
+
+def make_student(conn, sid, history, spring=()):
+    """A test student with an exact course history: (course, semester, grade or None for in progress).
+    `spring` lists courses already on their Spring 2027 schedule (added directly, to set up a credit load)."""
+    conn.execute("INSERT INTO students VALUES (?,?,?,?,?)", (sid, "Test Student", "Computer Science", "P01", "Fall 2024"))
+    for course, semester, grade in history:
+        conn.execute("INSERT INTO grades VALUES (?,?,?,?)", (sid, course, semester, grade))
+    for course in spring:
+        conn.execute("INSERT INTO grades VALUES (?,?,?,NULL)", (sid, course, REGISTRATION_SEMESTER))
+    conn.commit()
+    return Registrar(conn, User("admin"))
+
+
+def test_prerequisite_needs_c_minus_or_better(conn):
+    a = make_student(conn, "S9001", [("CS101", "Fall 2025", "D")])
+    with pytest.raises(RegistrarError, match="below C-"):
+        a.register("CS102", student_id="S9001")
+    a = make_student(conn, "S9002", [("CS101", "Fall 2025", "C-")])
+    assert "Registered" in a.register("CS102", student_id="S9002")
+
+
+def test_repeated_course_counts_once_with_latest_grade(conn):
+    a = make_student(conn, "S9003", [("CS101", "Fall 2024", "D"), ("CS101", "Spring 2025", "B"),
+                                     ("ENG101", "Fall 2024", "A")])
+    t = a.transcript("S9003")
+    assert t["credits_earned"] == 6          # CS101 counted once, not twice
+    assert t["cumulative_gpa"] == 3.5        # (B 3.0 x 3 + A 4.0 x 3) / 6; the earlier D is left out
+    first_try = t["terms"][0]["courses"]
+    assert any("not counted" in c["grade"] for c in first_try if c["course"] == "CS101")
+
+
+def test_only_courses_with_d_or_f_can_be_repeated(conn):
+    a = make_student(conn, "S9004", [("CS101", "Fall 2025", "C")])
+    with pytest.raises(RegistrarError, match="already completed"):
+        a.register("CS101", student_id="S9004")
+    a = make_student(conn, "S9005", [("CS101", "Fall 2025", "F"), ("ENG101", "Fall 2025", "A")])
+    assert "Registered" in a.register("CS101", student_id="S9005")
+
+
+def test_cannot_register_for_a_course_being_taken_now(conn):
+    a = make_student(conn, "S9006", [("CS101", CURRENT_SEMESTER, None)])
+    with pytest.raises(RegistrarError, match="currently taking"):
+        a.register("CS101", student_id="S9006")
+
+
+def test_probation_limits_registration_to_13_credits(conn):
+    # GPA 1.0 (one D) = academic probation; 11 credits already on the Spring schedule, adding 3 makes 14
+    a = make_student(conn, "S9007", [("ENG101", "Fall 2025", "D")], spring=["MATH150", "MATH160", "PHYS101"])
+    with pytest.raises(RegistrarError, match="academic probation"):
+        a.register("CS101", student_id="S9007")
+    # the same 14 credits are fine for a student in good standing
+    a = make_student(conn, "S9008", [("ENG101", "Fall 2025", "A")], spring=["MATH150", "MATH160", "PHYS101"])
+    problems = a.check_enrollment("CS101", student_id="S9008")["problems"]
+    assert not any("probation" in p or "Credit limit" in p for p in (problems if problems != "none" else []))
+
+
+def test_more_than_18_credits_is_an_overload(conn):
+    a = make_student(conn, "S9009", [("ENG101", "Fall 2025", "A")],
+                     spring=["MATH150", "MATH160", "PHYS101", "CS102", "CS201"])  # 17 credits
+    with pytest.raises(RegistrarError, match="overload"):
+        a.register("CS101", student_id="S9009")
+
+
+def test_full_course_is_refused(conn):
+    a = make_student(conn, "S9010", [])
+    taken = conn.execute("SELECT COUNT(*) FROM grades WHERE course='CS101' AND semester=?",
+                         (REGISTRATION_SEMESTER,)).fetchone()[0]
+    conn.execute("UPDATE schedule SET capacity=? WHERE course='CS101' AND semester=?", (taken, REGISTRATION_SEMESTER))
+    with pytest.raises(RegistrarError, match="is full"):
+        a.register("CS101", student_id="S9010")
+
+
+def test_drop_rules(conn):
+    a = make_student(conn, "S9011", [("ENG101", "Fall 2025", "A")])
+    a.register("CS101", student_id="S9011")
+    assert "Dropped" in a.drop("CS101", student_id="S9011")
+    with pytest.raises(RegistrarError, match="not enrolled"):
+        a.drop("CS101", student_id="S9011")
+    with pytest.raises(RegistrarError, match="Only current or upcoming"):
+        a.drop("ENG101", "Fall 2025", student_id="S9011")  # a finished, graded course
+
+
+def test_only_students_and_admins_can_register(conn):
+    advisor_id, advisee = advisor_and_advisee(conn)
+    with pytest.raises(PermissionDenied):
+        as_(conn, "advisor", advisor_id).register("CS101", student_id=advisee)
+    with pytest.raises(PermissionDenied):
+        as_(conn, "professor", "P02").register("CS101", student_id="S1001")
+
+
+def test_grade_submission_rules(conn):
+    p = as_(conn, "professor", "P02")  # teaches CS101
+    make_student(conn, "S9012", [("CS101", CURRENT_SEMESTER, None)])
+    assert "Recorded" in p.submit_grade("S9012", "CS101", "A-")
+    with pytest.raises(RegistrarError, match="not enrolled"):
+        p.submit_grade("S1001", "CS101", "B")  # S1001 isn't in CS101 this semester
+    with pytest.raises(RegistrarError):
+        p.submit_grade("S9012", "CS101", "B", semester=REGISTRATION_SEMESTER)  # next semester hasn't happened

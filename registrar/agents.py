@@ -115,14 +115,19 @@ SPECIALISTS = {
     "registration": "Registration Agent. Handles course catalog, semester schedules, class rosters, "
                     "and registering/dropping courses.",
     "analytics": "Analytics Agent. Produces statistics: grade distributions for a course or group of courses, "
-                 "and student groups (graduating, at risk of dismissal, probation, honors).",
-    "advising": "Advising Agent. Audits degree progress and recommends which courses to take next.",
+                 "and university-wide student groups (graduating, at risk of dismissal, probation, honors). "
+                 "For an advisor's own students, use the Advising Agent instead.",
+    "advising": "Advising Agent. Lists an advisor's advisees with GPA and standing (including who is at risk), "
+                "audits degree progress and recommends which courses to take next.",
 }
 
 POLICY = (f"Policies: current semester is {CURRENT_SEMESTER} (in progress); registration is open for "
           f"{REGISTRATION_SEMESTER}. Degree requires {DEGREE_CREDITS} credits, GPA >= 2.0 and all core courses. "
           f"Max {MAX_CREDITS_PER_SEMESTER} credits per semester. Prerequisites must be completed with C- or better; in-progress courses do not count. "
-          "GPA below 2.0 = at risk of dismissal; GPA 2.0 to 2.3 = probation watch; 3.5 or higher = honors. "
+          "GPA below 2.0 = academic probation and at risk of dismissal, limited to 13 credits per semester; "
+          "GPA 2.0 to 2.3 = probation watch; 3.5 or higher = honors. More than 18 credits is an overload that "
+          "needs written permission. Only courses with a D or F can be repeated, and a repeated course counts "
+          "once in GPA and credits, with its latest grade. A student can't register for a course they are taking now. "
           "Every passed course, core or elective, counts toward the credit total.")
 
 

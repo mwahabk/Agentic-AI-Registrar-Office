@@ -29,7 +29,14 @@ SQLite: Students · Grades · Schedule · Courses · Professors
   - Advisors can only see their own advisees.
   - Admins see everything.
 * Registration locks the database while it checks seats and saves, so two students can never both take the last seat (see `demo_last_seat.py`).
-* The service layer enforces the business rules: prerequisites (completed with C- or better; courses in progress don't count), seat capacity, time conflicts (including partly overlapping times), an 18-credit limit, the registration window, and valid grades.
+* The service layer enforces the business rules, based on NMSU's catalog and common university rules:
+  - Prerequisites must be completed with C- or better; courses in progress don't count.
+  - Seat capacity, and time conflicts (including partly overlapping times).
+  - At most 18 credits per semester; more is an overload that needs written permission.
+  - Students on academic probation (GPA below 2.0) may take at most 13 credits (NMSU's Probation I limit).
+  - Only courses with a D or F can be repeated; a repeated course counts once in GPA and credits, with its latest grade.
+  - A student can't register for a course they're taking this semester.
+  - Registration is only open for the upcoming semester; grades can only be entered for the current one, by the course's professor.
 
 ### Agents working together: enrollment
 
