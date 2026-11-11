@@ -129,7 +129,13 @@ footer { margin-top: 56px; font-size: 14px; color: var(--muted); }
     <path d="M430 296 C430 322, 360 318, 360 344" class="edge"/>
     <path d="M530 296 C530 322, 598 318, 598 344" class="edge"/>
     <path d="M630 296 C630 320, 837 316, 837 344" class="edge"/>
-    <text x="706" y="266" class="t-label">PARALLEL WHEN INDEPENDENT</text>
+    <text x="20" y="266" class="t-label">PARALLEL WHEN INDEPENDENT</text>
+    <path d="M690 261 H726" class="edge"/>
+    <rect x="730" y="214" width="210" height="94" rx="10" class="box"/><rect x="730" y="214" width="6" height="94" rx="3" fill="var(--deny)"/>
+    <text x="748" y="238" class="t-title">Policy agent (RAG)</text>
+    <text x="748" y="258" class="t-mono">search_knowledge</text>
+    <text x="748" y="276" class="t-mono">handbook · catalog · guide</text>
+    <text x="748" y="294" class="t-mono">hybrid BM25 + embeddings</text>
 
     <!-- specialists -->
     <g>
@@ -194,6 +200,9 @@ footer { margin-top: 56px; font-size: 14px; color: var(--muted); }
     <li><div><div class="who"><span class="chip coord">Registrar</span> writes one reply with a “How we checked” list</div>
       <div class="detail">One line per agent with what it found. When a step fails, the chain stops there: asking for a course whose prerequisite is still in progress stops at Records, and nothing is registered.</div></div></li>
   </ol>
+
+  <h2>Knowledge retrieval (RAG)</h2>
+  <p class="prose">Rules, deadlines and course descriptions live in the registrar's documents (<code>knowledge/</code>): the 2026-2027 handbook, a superseded 2024-2025 handbook, the course catalog and an advising guide. They are split into 41 section-sized chunks, embedded with a small local model and searched with hybrid retrieval (BM25 keyword search plus embedding search, combined by reciprocal rank fusion). The <b>Policy agent</b> answers from the retrieved passages with citations, prefers current rules over superseded ones, searches again when results are poor, and says when the documents don't cover a question. The Advising agent uses the same search, and a refused enrollment step is explained with the handbook rule behind it. Full details and evaluation: <code>docs/RAG_Report.pdf</code>.</p>
 
   <h2>Who can see what</h2>
   <p class="prose">These rules are checked in code on every tool call. The prompts describe them, but the prompts don't enforce them.</p>

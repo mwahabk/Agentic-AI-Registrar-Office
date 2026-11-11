@@ -102,12 +102,21 @@ TOOL_SPECS: dict[str, tuple[str, dict, set[str], str, str]] = {
                         "courses the student is eligible to take next.",
                         _schema({"student_id": SID}, []),
                         {"student", "advisor", "admin"}, "degree_progress", "advising"),
+    "search_knowledge": ("Search the registrar's documents: the 2026-2027 handbook (rules, deadlines, credit limits, "
+                         "probation, repeats, graduation, privacy), the course catalog with course descriptions, "
+                         "and the advising guide. Returns the most relevant passages with their source, effective "
+                         "date and whether they are current or superseded. Use plain questions or key terms; search "
+                         "again with different wording if the results don't answer the question.",
+                         _schema({"query": ("string", "What to look up, e.g. 'credit limit on probation'"),
+                                  "top_k": ("integer", "How many passages to return (default 4, max 8)")},
+                                 ["query"]),
+                         {"student", "professor", "advisor", "admin"}, "search_knowledge", "policy"),
     "list_advisees": ("List the advisor's advisees with GPA and standing.", _schema({}, []),
                       {"advisor"}, "list_advisees", "advising"),
 }
 
 # Advising also needs to read transcripts and the catalog/schedule.
-SHARED = {"advising": ["get_transcript", "list_courses", "course_schedule", "find_students"],
+SHARED = {"advising": ["get_transcript", "list_courses", "course_schedule", "find_students", "search_knowledge"],
           "analytics": ["find_students"]}
 
 SPECIALISTS = {
@@ -119,7 +128,25 @@ SPECIALISTS = {
                  "For an advisor's own students, use the Advising Agent instead.",
     "advising": "Advising Agent. Lists an advisor's advisees with GPA and standing (including who is at risk), "
                 "audits degree progress and recommends which courses to take next.",
+    "policy": "Policy Agent. Answers questions about registrar rules, deadlines, procedures and what courses "
+              "cover, by retrieving passages from the handbook, course catalog and advising guide (RAG), "
+              "with citations.",
 }
+
+# Agentic RAG (Chapter 14): the Policy agent doesn't just pass retrieved text along. It judges it.
+POLICY_AGENT_RULES = """
+How to answer (retrieval-augmented generation):
+1. Search with search_knowledge before answering. For a question with several parts, search each part separately.
+2. Judge the results. If none of them actually answers the question, search once more with different wording
+   (for example 'repeat' instead of 'retake', or the course code instead of its topic).
+3. Check every passage's status. A SUPERSEDED passage no longer applies. If it disagrees with a CURRENT passage,
+   follow the current one and say briefly that the older rule was replaced.
+4. Answer only from the retrieved passages. Cite each fact with its source in square brackets, for example
+   [Registrar Handbook 2026-2027 > Credit load and overloads].
+5. If the search says NO RELEVANT DOCUMENTS, or the passages don't cover the question, say the registrar's
+   documents don't cover it and suggest contacting the Registrar office. Never fill the gap from memory.
+6. You explain rules; you never apply them to a student's record or change anything. Record checks and
+   registration belong to the other agents."""
 
 POLICY = (f"Policies: current semester is {CURRENT_SEMESTER} (in progress); registration is open for "
           f"{REGISTRATION_SEMESTER}. Degree requires {DEGREE_CREDITS} credits, GPA >= 2.0 and all core courses. "
@@ -147,6 +174,8 @@ the others' work. Describe each delegation as "Step N: <what this agent checks>"
           the degree and how many credits remain afterwards.
   Step 4. registration: if all checks passed and the user clearly asked to enroll, register_course.
           Otherwise ask the user to confirm first.
+If a step stops the chain, also ask the policy agent to find the handbook rule behind the refusal, and quote
+it with its [source] citation, so the student sees the official rule and not only the error.
 End the reply with a short "How we checked" list: one line per agent saying what it found."""
 
 
@@ -188,7 +217,8 @@ def build_options(conn: sqlite3.Connection, user: User) -> ClaudeAgentOptions:
             prompt=(f"You are the {desc} You work for a university registrar office, serving "
                     f"{_who(user)}. Use your tools to get facts; never invent records. If a tool "
                     "returns PermissionDenied, explain that the user is not authorized; do not try "
-                    f"to work around it. Return a concise, well-organized answer.\n{POLICY}"),
+                    f"to work around it. Return a concise, well-organized answer.\n{POLICY}"
+                    + (POLICY_AGENT_RULES if spec == "policy" else "")),
             tools=[full(n) for n in names],
             model="inherit",
             background=False,  # coordinator must wait for the specialist's answer
@@ -206,6 +236,8 @@ def build_options(conn: sqlite3.Connection, user: User) -> ClaudeAgentOptions:
         "changes and only the tools apply the rules. Before registering, dropping "
         "or submitting grades, confirm the exact action with the user unless they already clearly "
         f"asked for it. Keep answers clear and brief; use tables for lists.\n{POLICY}"
+        "\nQuestions about rules, deadlines, procedures, privacy or what a course covers go to the 'policy' "
+        "agent, which looks them up in the registrar's documents. Keep its [source] citations in your answer."
     )
     if {"records", "registration", "advising"} <= agents.keys():
         system_prompt += ENROLLMENT_WORKFLOW
@@ -238,3 +270,13 @@ def handoff_note(prompt: str) -> str:
         return ""
     note = " ".join(prompt.split(marker, 1)[1].split())
     return note[:280] + ("..." if len(note) > 280 else "")
+
+
+def retrieval_sources(content) -> str:
+    """The SOURCES line of a search_knowledge result (or the knowledge-gap notice), for display."""
+    if isinstance(content, list):
+        content = " ".join(c.get("text", "") for c in content if isinstance(c, dict))
+    for line in (content or "").splitlines():
+        if line.startswith("SOURCES: ") or line.startswith("NO RELEVANT DOCUMENTS"):
+            return line.removeprefix("SOURCES: ")
+    return ""

@@ -8,9 +8,10 @@
 import argparse
 import asyncio
 
-from claude_agent_sdk import AssistantMessage, ClaudeSDKClient, ResultMessage, TextBlock, ToolUseBlock
+from claude_agent_sdk import (AssistantMessage, ClaudeSDKClient, ResultMessage, TextBlock, ToolResultBlock,
+                              ToolUseBlock, UserMessage)
 
-from registrar.agents import build_options, handoff_note
+from registrar.agents import build_options, handoff_note, retrieval_sources
 from registrar.db import DEFAULT_DB, connect
 from registrar.service import ROLES, PermissionDenied, Registrar
 
@@ -30,6 +31,10 @@ def show(msg, verbose: bool) -> None:
                     print(f"     [tool] {block.name.split('__')[-1]} {block.input}")
             elif isinstance(block, TextBlock) and not quiet:
                 print(f"\nRegistrar: {block.text}")
+    elif isinstance(msg, UserMessage) and isinstance(msg.content, list):
+        for block in msg.content:  # RAG step: which documents the knowledge search retrieved
+            if isinstance(block, ToolResultBlock) and retrieval_sources(block.content):
+                print(f"       retrieved: {retrieval_sources(block.content)}")
     elif isinstance(msg, ResultMessage) and msg.total_cost_usd:
         print(f"  (cost ${msg.total_cost_usd:.4f})")
 

@@ -10,13 +10,14 @@ import secrets
 from dataclasses import dataclass
 from pathlib import Path
 
-from claude_agent_sdk import AssistantMessage, ClaudeSDKClient, ResultMessage, TextBlock, ToolUseBlock
+from claude_agent_sdk import (AssistantMessage, ClaudeSDKClient, ResultMessage, TextBlock, ToolResultBlock,
+                              ToolUseBlock, UserMessage)
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from registrar.agents import build_options, handoff_note
+from registrar.agents import build_options, handoff_note, retrieval_sources
 from registrar.db import CURRENT_SEMESTER, REGISTRATION_SEMESTER, connect
 from registrar.service import ROLES, PermissionDenied, Registrar, User
 
@@ -85,6 +86,7 @@ async def chat(ws: WebSocket, token: str):
         await ws.close()
         return
     agent_names: dict[str, str] = {}  # Agent tool_use id -> specialist name
+    searches: dict[str, tuple[str, str]] = {}  # search_knowledge tool_use id -> (agent, query)
     try:
         while True:
             question = (await ws.receive_json()).get("message", "").strip()
@@ -101,12 +103,22 @@ async def chat(ws: WebSocket, token: str):
                                                 "description": block.input.get("description", ""),
                                                 "handoff": handoff_note(block.input.get("prompt", ""))})
                         elif isinstance(block, ToolUseBlock):
+                            if block.name.endswith("search_knowledge"):
+                                searches[block.id] = (agent_names.get(msg.parent_tool_use_id, "registrar"),
+                                                      block.input.get("query", ""))
                             await ws.send_json({"type": "tool", "name": block.name.split("__")[-1],
                                                 "agent": agent_names.get(msg.parent_tool_use_id, "registrar"),
                                                 "input": block.input})
                         elif isinstance(block, TextBlock) and msg.parent_tool_use_id is None:
                             # text alongside a tool call is a progress note; otherwise it is the answer
                             await ws.send_json({"type": "note" if has_tool else "answer", "text": block.text})
+                elif isinstance(msg, UserMessage) and isinstance(msg.content, list):
+                    # RAG step: show which documents the knowledge search retrieved
+                    for block in msg.content:
+                        if isinstance(block, ToolResultBlock) and block.tool_use_id in searches:
+                            agent, query = searches.pop(block.tool_use_id)
+                            await ws.send_json({"type": "retrieved", "agent": agent, "query": query,
+                                                "sources": retrieval_sources(block.content)})
                 elif isinstance(msg, ResultMessage):
                     await ws.send_json({"type": "done", "cost": msg.total_cost_usd,
                                         "seconds": round(msg.duration_ms / 1000, 1)})

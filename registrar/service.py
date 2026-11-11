@@ -422,6 +422,14 @@ class Registrar:
                             "credits_in_progress": ip, "f_grades": fails})
         return out
 
+    # ---- knowledge retrieval (RAG) ----------------------------------------------------------
+    def search_knowledge(self, query: str, top_k: int = 4) -> str:
+        """Search the registrar handbook, course catalog and advising guide (public documents, all roles)."""
+        from .rag import format_results, knowledge_base
+        kb = knowledge_base()
+        top_k = max(1, min(int(top_k), 8))
+        return format_results(query, kb.search(query, top_k=top_k), kb)
+
     # ---- advising -----------------------------------------------------------------------
     def list_advisees(self) -> list[dict]:
         self._require("advisor")

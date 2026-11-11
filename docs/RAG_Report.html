@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RAG in the Agentic Registrar Office</title>
+<style>
+  @page { size: Letter; margin: 0.8in 0.85in; }
+  :root { --ink: #14213D; --muted: #4A5568; --rust: #B5462A; --amber: #E8A33D; --line: #E1DDD3;
+          --paper: #F7F5F0; --tint: #FBEDE7; --cool: #EEF1F6; --green: #2c7653; }
+  body { font: 10.5pt/1.5 "Helvetica Neue", Helvetica, Arial, sans-serif; color: var(--ink); margin: 0; }
+  h1 { font-size: 22pt; line-height: 1.15; margin: 0 0 6px; }
+  h2 { font-size: 14pt; margin: 22px 0 6px; break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 14px 0 4px; break-after: avoid; }
+  p { margin: 0 0 8px; }
+  .eyebrow { font: bold 8.5pt/1 Helvetica, Arial, sans-serif; letter-spacing: .08em; color: var(--rust); margin-bottom: 6px; }
+  .sub { color: var(--muted); font-size: 11.5pt; margin-bottom: 14px; }
+  .box { background: var(--tint); padding: 10px 14px; border-radius: 6px; margin: 10px 0; break-inside: avoid; }
+  .box.cool { background: var(--cool); }
+  table { border-collapse: collapse; width: 100%; margin: 6px 0 12px; font-size: 9.5pt; break-inside: avoid; }
+  th, td { border: 1px solid var(--line); padding: 5px 7px; text-align: left; vertical-align: top; }
+  th { background: var(--cool); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.best td { font-weight: bold; }
+  code { font: 9pt Menlo, Consolas, monospace; background: var(--cool); padding: 0 3px; border-radius: 3px; }
+  pre { font: 8.3pt/1.35 Menlo, Consolas, monospace; background: var(--paper); border: 1px solid var(--line);
+        padding: 8px 10px; border-radius: 6px; white-space: pre-wrap; margin: 6px 0 10px; break-inside: avoid; }
+  ul, ol { margin: 0 0 8px 18px; padding: 0; } li { margin: 2px 0; }
+  .fig { margin: 8px 0 4px; break-inside: avoid; }
+  .cap { font-size: 9pt; color: var(--muted); margin-bottom: 10px; }
+  img.shot { width: 100%; border: 1px solid var(--line); border-radius: 6px; }
+  .page-break { break-before: page; }
+  svg text { font-family: Helvetica, Arial, sans-serif; }
+</style>
+</head>
+<body>
+
+<div class="eyebrow">AGENTIC AI · FALL 2026 · PROJECT REPORT</div>
+<h1>Knowledge Retrieval (RAG) in the Agentic Registrar Office</h1>
+<div class="sub">How the multi-agent registrar system retrieves the university's own documents to answer questions about rules, deadlines and courses, and how well it works.</div>
+
+<h2>1. Summary</h2>
+<p>Our system is a multi-agent registrar office: a <b>Registrar</b> coordinator agent routes each request to specialist agents (Records, Registration, Analytics, Advising) that work on a student database through tools. For this assignment we added <b>Retrieval-Augmented Generation (RAG)</b>: a <b>knowledge base</b> of the registrar's documents (handbook, course catalog, advising guide), a <b>hybrid retriever</b> (BM25 keyword search + embedding search), and a new <b>Policy agent</b> that answers from the retrieved passages with citations. The Advising agent and the enrollment workflow also use retrieval.</p>
+<p>Following Chapter 14, the Policy agent applies <b>Agentic RAG</b>: it judges the retrieved passages, prefers current rules over a superseded handbook, searches again with new wording when results are poor, and says so when the documents do not cover a question instead of guessing.</p>
+<div class="box cool"><b>Results.</b> On 30 test questions, hybrid retrieval put the right section in the top 3 for <b>87%</b> of questions (MRR 0.80). The knowledge-gap check rejected 4 of 5 off-topic questions and wrongly rejected none of the 30 answerable ones. In live runs, the agents correctly reconciled a superseded rule, detected an uncovered question, and cited the handbook rule behind a refused enrollment. All 33 automated tests pass.</div>
+
+<h2>2. Why the registrar needs RAG</h2>
+<p>Chapter 14 starts from the <i>static-training limitation</i>: a language model only knows what it saw in training. A registrar's knowledge is the opposite of that: it is <b>institution-specific</b> (this university's credit limits, probation rules, course descriptions), <b>time-bound</b> (Spring 2027 deadlines did not exist when the model was trained) and <b>changes between editions</b> (the 2026-2027 handbook replaced the 2024-2025 one). Without retrieval, the agents could only enforce the rules written into code; they could not explain them, quote them, or answer "when is the last day to drop?". RAG turns the agents from closed-book into open-book: they look the answer up in the university's own documents and cite where it came from.</p>
+<p>We keep a clear division of labor: <b>the code enforces the rules</b> (the service layer refuses a 14-credit load for a student on probation) and <b>RAG explains them</b> (the agent quotes the handbook section that sets the 13-credit limit). A test checks that the handbook states the same numbers the code enforces, so the two can never drift apart.</p>
+
+<h2>3. Where RAG is used in the system</h2>
+<div class="fig">
+<svg viewBox="0 0 700 300" width="100%" xmlns="http://www.w3.org/2000/svg">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#4A5568"/></marker></defs>
+  <rect x="10" y="10" width="130" height="44" rx="6" fill="#EEF1F6"/><text x="75" y="37" text-anchor="middle" font-size="12" font-weight="bold" fill="#14213D">User</text>
+  <path d="M140 32 H198" stroke="#4A5568" stroke-width="1.3" marker-end="url(#a)"/>
+  <rect x="200" y="10" width="170" height="44" rx="6" fill="#14213D"/><text x="285" y="30" text-anchor="middle" font-size="12" font-weight="bold" fill="#fff">Registrar</text><text x="285" y="45" text-anchor="middle" font-size="9.5" fill="#BFC8D6">coordinator, routes requests</text>
+  <path d="M250 54 C250 80, 75 76, 75 98" stroke="#4A5568" stroke-width="1.3" fill="none" marker-end="url(#a)"/>
+  <path d="M300 54 V98" stroke="#4A5568" stroke-width="1.3" marker-end="url(#a)"/>
+  <path d="M340 54 C340 80, 515 76, 515 98" stroke="#4A5568" stroke-width="1.3" fill="none" marker-end="url(#a)"/>
+  <rect x="10" y="100" width="150" height="52" rx="6" fill="#fff" stroke="#E1DDD3"/><text x="85" y="122" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#14213D">Records · Registration</text><text x="85" y="139" text-anchor="middle" font-size="9.5" fill="#4A5568">· Analytics (database tools)</text>
+  <rect x="225" y="100" width="150" height="52" rx="6" fill="#FBEDE7" stroke="#B5462A"/><text x="300" y="122" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#B5462A">Policy agent (new)</text><text x="300" y="139" text-anchor="middle" font-size="9.5" fill="#4A5568">Agentic RAG, citations</text>
+  <rect x="440" y="100" width="150" height="52" rx="6" fill="#fff" stroke="#E1DDD3"/><text x="515" y="122" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#14213D">Advising agent</text><text x="515" y="139" text-anchor="middle" font-size="9.5" fill="#4A5568">uses retrieval for advice</text>
+  <path d="M85 152 V200" stroke="#4A5568" stroke-width="1.3" marker-end="url(#a)"/>
+  <path d="M300 152 V200" stroke="#B5462A" stroke-width="1.6" marker-end="url(#a)"/>
+  <path d="M515 152 C515 180, 380 176, 380 200" stroke="#B5462A" stroke-width="1.6" fill="none" marker-end="url(#a)"/>
+  <rect x="10" y="202" width="150" height="44" rx="6" fill="#14213D"/><text x="85" y="222" text-anchor="middle" font-size="11" font-weight="bold" fill="#fff">Service layer + SQLite</text><text x="85" y="237" text-anchor="middle" font-size="9.5" fill="#BFC8D6">enforces rules in code</text>
+  <rect x="225" y="202" width="245" height="44" rx="6" fill="#B5462A"/><text x="347" y="221" text-anchor="middle" font-size="11" font-weight="bold" fill="#fff">search_knowledge tool</text><text x="347" y="236" text-anchor="middle" font-size="9.5" fill="#FBEDE7">hybrid retrieval: BM25 + embeddings (RRF)</text>
+  <path d="M347 246 V266" stroke="#4A5568" stroke-width="1.3" marker-end="url(#a)"/>
+  <rect x="160" y="268" width="375" height="28" rx="6" fill="#F7F5F0" stroke="#E1DDD3"/><text x="347" y="286" text-anchor="middle" font-size="10" fill="#14213D">Knowledge base: handbook 2026 · handbook 2024 (superseded) · course catalog · advising guide</text>
+  <text x="600" y="226" font-size="9.5" fill="#4A5568">explains</text><text x="600" y="239" font-size="9.5" fill="#4A5568">the rules</text>
+  <text x="168" y="226" font-size="9.5" fill="#4A5568" text-anchor="start"></text>
+</svg>
+</div>
+<div class="cap">Figure 1. The Policy agent and the Advising agent call <code>search_knowledge</code>. Database agents keep using the service layer, which enforces the same rules the documents describe.</div>
+<p>RAG is used in four places:</p>
+<ol>
+<li><b>Policy questions.</b> "When is the last day to drop?", "Can I take 20 credits?", "Who can see my grades?" The Registrar routes these to the Policy agent, which retrieves and cites the handbook.</li>
+<li><b>Course discovery.</b> "Which courses are about protecting computers from hackers?" Semantic search over the course catalog finds Computer Security even though the question shares no words with its title.</li>
+<li><b>Advising.</b> The Advising agent retrieves the advising guide (elective tracks, advice for students on probation) and combines it with the student's record from the database.</li>
+<li><b>Explaining refusals in the enrollment workflow.</b> When a step of the enrollment chain refuses a request (for example a missing prerequisite), the Registrar asks the Policy agent for the handbook rule behind it, so the student sees the official rule with its citation, not just an error.</li>
+</ol>
+
+<h2>4. The knowledge base</h2>
+<table>
+<tr><th>Document</th><th>Status</th><th class="num">Chunks</th><th>Contents</th></tr>
+<tr><td>Registrar Handbook 2026-2027</td><td>current</td><td class="num">10</td><td>Registration periods, Spring 2027 deadlines, credit load and overloads, academic standing and probation, prerequisites, repeating courses, grading and GPA, time conflicts and seats, graduation, records privacy (FERPA)</td></tr>
+<tr><td>Registrar Handbook 2024-2025</td><td>superseded</td><td class="num">4</td><td>Older rules that conflict with the current ones (19-credit limit, 16 credits on probation, grades averaged on repeats, D counts for prerequisites). Kept on purpose to test conflict handling.</td></tr>
+<tr><td>Course Catalog 2026-2027</td><td>current</td><td class="num">22</td><td>One description per course, with credits, prerequisites and instructor (NMSU CS faculty)</td></tr>
+<tr><td>CS Advising Guide</td><td>current</td><td class="num">5</td><td>Recommended sequence, electives by interest, advice for students on probation, graduation planning, when to contact the office</td></tr>
+</table>
+<p>The rules follow NMSU's catalog where we could confirm them (12-18 credit full-time load, overloads need written permission, 13-credit limit on academic probation, repeats allowed after a D or F) and common university policy elsewhere. Each document starts with metadata: title, effective date, status (current or superseded) and, for the old handbook, which edition replaced it.</p>
+
+<h2>5. The RAG pipeline</h2>
+<h3>Ingestion (<code>registrar/rag.py</code>)</h3>
+<ol>
+<li><b>Load</b> the Markdown documents from <code>knowledge/</code> and read their metadata.</li>
+<li><b>Chunk by section.</b> Each <code>##</code> section becomes one chunk, because each section answers one kind of question (Chapter 14: "a 50-page manual becomes separate chunks per section"). Sections over 1,200 characters would be split by paragraph; none are that long, so the 41 chunks range from 116 to 667 characters (median 245). Every chunk keeps its document, section title, effective date and status.</li>
+<li><b>Embed</b> each chunk with <code>potion-retrieval-32M</code>, a small static embedding model (512 dimensions) tuned for retrieval. It runs locally on a laptop, needs no API key, and downloads once (about 130 MB). The section title is embedded with the text, as a header would be.</li>
+<li><b>Index.</b> The vectors are normalized and stored in a NumPy matrix, cached in <code>data/rag_index.npz</code> and rebuilt automatically when a document or the model changes. With 41 chunks an exact search is instant; at a larger scale this matrix would move to a vector database (FAISS, Chroma, pgvector), as the slides describe.</li>
+</ol>
+<h3>Retrieval</h3>
+<ul>
+<li><b>Keyword search:</b> our own Okapi BM25 implementation (k1 = 1.5, b = 0.75, stop words removed). Precise for course codes and exact terms such as "FERPA".</li>
+<li><b>Vector search:</b> cosine similarity between the question's embedding and every chunk. Finds meaning when the words differ.</li>
+<li><b>Hybrid (default):</b> the two rankings are combined with <b>reciprocal rank fusion</b> (score = 1/(60 + vector rank) + 1/(60 + keyword rank)), and the top 4 chunks are returned.</li>
+<li><b>Knowledge-gap check:</b> if the best chunk's similarity is below 0.22 and there is no strong keyword match (BM25 &gt; 3), the tool reports "NO RELEVANT DOCUMENTS" instead of passing weak matches to the model. Both thresholds were tuned on the evaluation set (section 7).</li>
+<li><b>Offline fallback:</b> if the embedding model cannot be loaded, retrieval falls back to BM25 alone, so the system keeps working.</li>
+</ul>
+<h3>Augmentation and generation</h3>
+<p>The <code>search_knowledge</code> tool returns a <b>SOURCES</b> line followed by each passage with its citation, effective date, status and both scores. The agent writes its answer from these passages only and cites them in square brackets. A shortened tool result:</p>
+<pre>Retrieved 4 chunks (hybrid search) for: 'probation credit limit'
+SOURCES: [1] Registrar Handbook 2026-2027 &gt; Academic standing and probation | [2] Computer Science Advising Guide &gt;
+Students on probation or at risk | [3] Registrar Handbook 2026-2027 &gt; Credit load and overloads | [4] Registrar Handbook
+2024-2025 &gt; Academic standing and probation
+
+[1] Registrar Handbook 2026-2027 &gt; Academic standing and probation | effective Fall 2026 | CURRENT | semantic 0.43, keyword 3.59
+... Academic probation: cumulative GPA below 2.0. The student is at risk of dismissal and may register for at most
+13 credits per semester. ...
+  (passages 2 and 3 omitted)
+[4] Registrar Handbook 2024-2025 &gt; Academic standing and probation | effective Fall 2024 | SUPERSEDED (replaced by
+Registrar Handbook 2026-2027) | semantic 0.39, keyword 3.55
+... Students with a cumulative GPA below 2.0 are placed on academic probation and may register for at most 16 credits
+per semester.</pre>
+
+<h2>6. Agentic RAG: the Policy agent</h2>
+<p>Standard RAG retrieves and injects. Chapter 14's Agentic RAG adds an agent that <i>interrogates</i> what was retrieved. The Policy agent's instructions require it to:</p>
+<ol>
+<li><b>Decompose</b> multi-part questions and search each part separately.</li>
+<li><b>Judge relevance</b>, and search again with different wording if nothing answers the question (for example "repeat" instead of "retake").</li>
+<li><b>Validate sources</b>: a SUPERSEDED passage no longer applies; when it conflicts with a CURRENT one, follow the current rule and say the old one was replaced.</li>
+<li><b>Ground and cite</b>: answer only from the passages, citing each fact.</li>
+<li><b>Detect knowledge gaps</b>: if nothing relevant is found, say the documents don't cover it and point to the Registrar office.</li>
+<li><b>Stay in its lane</b>: explain rules, never apply them to a record or change data (other agents do that, through code).</li>
+</ol>
+<h3>Live examples (Claude Haiku 5.5, excerpts of real runs)</h3>
+<p><b>Conflict reconciliation.</b> <i>"A friend told me students on probation can take up to 16 credits. Is that right?"</i> The Policy agent retrieved both handbooks, recognized the 16-credit rule as the superseded 2024 edition, and answered:</p>
+<pre>No, that's out of date. A student on academic probation can take at most 13 credits per semester in the current
+rules (Fall 2026). The 16-credit limit came from the 2024-2025 handbook, which has been superseded.
+Source: [Registrar Handbook 2026-2027 &gt; Academic standing and probation, effective Fall 2026, current]</pre>
+<p><b>Knowledge-gap detection.</b> <i>"How much does a parking permit cost on campus?"</i> The first search returned NO RELEVANT DOCUMENTS; the agent searched once more with other wording, judged those passages irrelevant too, and answered that the registrar's documents don't cover parking fees, suggesting the Registrar or parking office. It did not invent a price.</p>
+<p><b>Explaining a refused enrollment.</b> <i>"Enroll me in Operating Systems (CS301) for Spring 2027."</i> The Records agent found the prerequisite CS210 not taken; the chain stopped, and the Policy agent retrieved the rule:</p>
+<pre>Rule behind this (Registrar Handbook 2026-2027 &gt; Prerequisites): "A prerequisite counts only after it is completed
+with a grade of C- or better. Courses still in progress do not count... Students who believe a prerequisite should be
+waived may petition the department head; the online assistant cannot grant prerequisite overrides."</pre>
+<p><b>Combining retrieval with records.</b> For student S1038 (GPA 1.30) asking the same probation question in the web app, the Registrar ran the Policy agent and the Advising agent in parallel: the answer quoted the current 13-credit rule <i>and</i> applied it to the student's own record.</p>
+<div class="fig"><img class="shot" src="rag_web.png" alt="Web app answer combining a cited handbook rule with the student's record"></div>
+<div class="cap">Figure 2. Web app: the trace lists each knowledge search and what it retrieved; the answer cites the current handbook, notes that the 16-credit rule is superseded, and applies the rule to the student.</div>
+
+<h2>7. Evaluation</h2>
+<p><code>rag_eval.py</code> measures retrieval on 30 questions written the way students ask them (24 paraphrased, 6 with exact terms or course codes), each labeled with the section(s) that answer it, plus 5 off-topic questions the documents don't cover. No language model is involved, so it is free and repeatable.</p>
+<table>
+<tr><th>Retrieval mode</th><th class="num">Recall@1</th><th class="num">Recall@3</th><th class="num">MRR</th></tr>
+<tr><td>Keyword (BM25)</td><td class="num">70%</td><td class="num">87%</td><td class="num">0.80</td></tr>
+<tr><td>Vector (embeddings)</td><td class="num">73%</td><td class="num">80%</td><td class="num">0.79</td></tr>
+<tr class="best"><td>Hybrid (RRF) — used</td><td class="num">70%</td><td class="num">87%</td><td class="num">0.80</td></tr>
+</table>
+<p>Recall@k is the share of questions whose answer is in the top k chunks; MRR is the mean of 1/rank of the first correct chunk. Vector search is best at ranking paraphrased questions first, keyword search is better on course codes and exact terms, and hybrid keeps keyword search's top-3 recall. The <b>knowledge-gap check</b> rejected 4 of 5 off-topic questions and 0 of 30 answerable ones.</p>
+<h3>Choosing the embedding model</h3>
+<table>
+<tr><th>Model</th><th class="num">Dims</th><th class="num">Vector R@3</th><th class="num">Hybrid R@3</th><th class="num">Hybrid MRR</th><th class="num">Off-topic rejected</th></tr>
+<tr><td>potion-base-8M</td><td class="num">256</td><td class="num">73%</td><td class="num">87%</td><td class="num">0.75</td><td class="num">0 / 5</td></tr>
+<tr><td>potion-base-32M</td><td class="num">512</td><td class="num">80%</td><td class="num">87%</td><td class="num">0.78</td><td class="num">1 / 5</td></tr>
+<tr class="best"><td>potion-retrieval-32M (used)</td><td class="num">512</td><td class="num">80%</td><td class="num">87%</td><td class="num">0.80</td><td class="num">4 / 5</td></tr>
+</table>
+<p>Two lessons. First, <b>hybrid search matters most when embeddings are weak</b>: with the smallest model, vector search alone reached 73% recall@3 and hybrid raised it to 87%. Second, the retrieval-tuned model separates on-topic from off-topic questions far better (off-topic similarity at most 0.20), which is what makes the knowledge-gap check work.</p>
+<h3>Where retrieval misses</h3>
+<p>Hybrid retrieval misses 4 questions in the top 3. "I failed a class, can I retake it?" ranks the probation advice first (which also talks about repeating failed courses) because "retake" never appears in the handbook. "When does the spring semester start?" ranks "Registration periods" above the calendar. These are the cases where the agent layer helps: the Policy agent searches again with different wording, and in the live run it found the "Repeating a course" section and quoted it.</p>
+
+<h2>8. How this maps to Chapter 14</h2>
+<table>
+<tr><th>Chapter 14 concept</th><th>In our system</th></tr>
+<tr><td>Static-training limitation</td><td>Handbook rules, Spring 2027 deadlines and course descriptions are retrieved, not assumed</td></tr>
+<tr><td>Chunking</td><td>One chunk per section with metadata; 41 chunks, median 245 characters</td></tr>
+<tr><td>Embeddings and semantic similarity</td><td>potion-retrieval-32M, cosine similarity; "protecting computers from hackers" → Computer Security</td></tr>
+<tr><td>BM25, vector and hybrid search</td><td>All three implemented and compared; hybrid with reciprocal rank fusion is the default</td></tr>
+<tr><td>Vector database</td><td>NumPy index cached on disk (exact search); FAISS/Chroma/pgvector would replace it at scale</td></tr>
+<tr><td>Retrieval trade-offs</td><td>Top-k = 4, a relevance threshold, metadata (effective date, status) on every chunk</td></tr>
+<tr><td>Citations and reduced hallucination</td><td>Every fact cited as [document &gt; section]; answers only from retrieved text</td></tr>
+<tr><td>Agentic RAG: source validation, conflict reconciliation</td><td>Superseded 2024 handbook detected and overruled by the current edition</td></tr>
+<tr><td>Agentic RAG: multi-step decomposition</td><td>Multi-part questions searched part by part; rephrased search when results are poor</td></tr>
+<tr><td>Agentic RAG: knowledge-gap detection</td><td>"NO RELEVANT DOCUMENTS" check; the agent declines to guess</td></tr>
+<tr><td>GraphRAG</td><td>Not used for documents. The prerequisite chain is already a graph (courses linked by prerequisites) that the database tools traverse; a GraphRAG version is listed as future work</td></tr>
+</table>
+
+<h2>9. Limitations and future work</h2>
+<ul>
+<li><b>Sample documents.</b> The handbook is written for this project from NMSU rules; a production system would ingest the real NMSU catalog and keep it updated each term (Chapter 14's "index staleness").</li>
+<li><b>Small evaluation set.</b> 30 questions written by us; a larger set from real student questions would give more reliable numbers.</li>
+<li><b>No re-ranking.</b> A cross-encoder re-ranker could fix misses such as "retake" vs "repeat".</li>
+<li><b>Cost and latency.</b> Agentic RAG adds model calls (the Policy agent often searches two or three times); with Claude Haiku 5.5 a policy question cost $0.001-0.004 and took about 5-15 seconds in our runs.</li>
+<li><b>GraphRAG for degree planning.</b> Courses, prerequisites and degree requirements form a natural knowledge graph; multi-hop questions ("what's the fastest path to Machine Learning?") would suit graph traversal.</li>
+</ul>
+
+<h2>10. How to run and verify</h2>
+<pre>.venv\Scripts\python rag_eval.py          # retrieval evaluation table (free, no Claude calls)
+.venv\Scripts\python -m pytest -q         # 33 tests, including 8 for RAG
+.venv\Scripts\python main.py --role student --id S1038 -v -q "Can students on probation take 16 credits?"</pre>
+<p>The RAG tests check chunking and metadata, that the course catalog matches the database (credits, prerequisites, instructors), that the handbook states the same limits the code enforces, retrieval quality on the evaluation set, semantic matching, the knowledge-gap check, labeling of superseded passages, and the keyword-only fallback.</p>
+
+</body>
+</html>

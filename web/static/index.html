@@ -10,12 +10,12 @@
   :root {
     --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1f23; --muted: #6b6f76; --line: #e3e1da;
     --accent: #2f5d50; --accent-ink: #ffffff; --soft: #eef3f1; --warn: #a2401f;
-    --records: #3b6ea5; --registration: #2f7d5b; --analytics: #8a5a12; --advising: #7a4a8c;
+    --records: #3b6ea5; --registration: #2f7d5b; --analytics: #8a5a12; --advising: #7a4a8c; --policy: #a2401f;
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg: #16181b; --panel: #1f2226; --ink: #e8e6e1; --muted: #9a9ea6; --line: #33373d;
       --accent: #7fb8a4; --accent-ink: #10201b; --soft: #24302c; --warn: #e48a68;
-      --records: #8fb6e0; --registration: #86c9a8; --analytics: #e0b56a; --advising: #c79bd8; }
+      --records: #8fb6e0; --registration: #86c9a8; --analytics: #e0b56a; --advising: #c79bd8; --policy: #e48a68; }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink);
@@ -56,6 +56,7 @@
     color: var(--panel); background: var(--muted); }
   .chip.records { background: var(--records); } .chip.registration { background: var(--registration); }
   .chip.analytics { background: var(--analytics); } .chip.advising { background: var(--advising); }
+  .chip.policy { background: var(--policy); }
   .tool { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
   .handoff { display: block; margin-left: 18px; font-style: italic; }
   .meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
@@ -109,11 +110,11 @@
 <script>
 const $ = id => document.getElementById(id);
 const SUGGEST = {
-  student: ["Show my transcript", "What is my schedule this semester?", "Am I on track to graduate?",
-            "What should I take next semester?"],
+  student: ["Show my transcript", "Am I on track to graduate?", "What should I take next semester?",
+            "When is the last day to drop a class?", "Which courses are about security?"],
   professor: ["What am I teaching this semester?", "Show my class rosters", "How are grades in my courses historically?"],
   advisor: ["List my advisees", "Which of my advisees are at risk?", "Who needs to register for next semester?"],
-  admin: ["Which students are on the brink of dismissal?", "Who will graduate?",
+  admin: ["What is the credit limit for students on probation?", "Which students are on the brink of dismissal?", "Who will graduate?",
           "Grade distribution across CS courses", "Which courses give a lot of As or Fs?"],
 };
 let info = null, token = null, ws = null, current = null;
@@ -208,6 +209,8 @@ function handle(ev) {
   }
   else if (ev.type === "tool" && $("showtools").checked)
     step(`<span class="tool">${esc(ev.agent)} · ${esc(ev.name)}(${esc(JSON.stringify(ev.input))})</span>`);
+  else if (ev.type === "retrieved")
+    step(`<span class="handoff">${esc(ev.agent)} searched the documents for “${esc(ev.query)}” → ${esc(ev.sources)}</span>`);
   else if (ev.type === "answer") current.answers.push(ev.text);
   else if (ev.type === "done") finish(ev);
 }
