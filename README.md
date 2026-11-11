@@ -6,7 +6,7 @@ A multi-agent AI system that works like a university registrar office. It's buil
 * **[How to install and run](#installation)**: set up once, then run the web app or the terminal version
 * **[How to test it (TESTING.md)](TESTING.md)**: step-by-step tests in the web app, with expected results
 * **[RAG report (PDF)](docs/RAG_Report.pdf)**: how knowledge retrieval is used in the system
-* **[Architecture diagram](docs/architecture.html)**: download and open in a browser
+* **[Architecture (PDF)](docs/architecture.pdf)**: system diagram, agents, enrollment chain, RAG, access rules and data model
 
 ## Architecture
 
@@ -191,7 +191,7 @@ Shows what happens when two students try to take the **last seat** in a course a
 | Web page loads but messages don't send, and the server log says `No supported WebSocket library detected` | Run `.venv\Scripts\python -m pip install websockets`, restart the server, then sign in again. |
 | Error about usage limits | Your plan's limit was reached. Wait for it to reset, or switch to a lighter model (step 3). |
 
-Architecture diagram: `docs/architecture.html`
+Architecture: `docs/architecture.pdf`
 
 On first run, the database is created at `data/registrar.db`. It's seeded with sample data: 60 students, 13 professors, 22 courses (16 core and general, 6 CS electives), 6 semesters, and an advisor for each student. Delete the file to reset it.
 Fall 2026 is in progress, and registration is open for Spring 2027.
@@ -209,5 +209,5 @@ Fall 2026 is in progress, and registration is open for Spring 2027.
 * `demo_last_seat.py`: demo of two students racing for the last seat
 * `TESTING.md`: step-by-step test guide with expected results
 * `web/app.py`, `web/static/index.html`: web chat (FastAPI + WebSocket)
-* `docs/architecture.html`: architecture diagram for the write-up
+* `docs/architecture.pdf` (and `.html`): architecture diagram and design for the write-up
 * `tests/test_service.py`: tests for access control and business rules
